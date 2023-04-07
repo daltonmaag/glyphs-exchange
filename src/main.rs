@@ -1,11 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use clap::{Parser, Subcommand};
 use glyphstool::{Layer, Plist, ToPlist};
+use norad::designspace::DesignSpaceDocument;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -17,13 +18,13 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     Ufo2glyphs {
-        /// Source UFOs to convert.
+        /// Source Designspace to convert.
         #[arg(required = true)]
-        sources: Vec<PathBuf>,
+        designspace_path: PathBuf,
 
-        /// The path to the Glyphs.app file to write.
-        #[arg(required = true)]
-        output: PathBuf,
+        /// The path to the Glyphs.app file to write (default: next to the input
+        /// Designspace).
+        output_path: Option<PathBuf>,
     },
 }
 
@@ -31,21 +32,50 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Ufo2glyphs { sources, output } => {
-            let sources: Vec<norad::Font> = sources
-                .iter()
-                .map(|path| norad::Font::load(path).expect("Could not load UFO"))
-                .collect();
+        Commands::Ufo2glyphs {
+            designspace_path,
+            output_path,
+        } => {
+            let context = DesignspaceContext::from_path(&designspace_path);
+            let glyphs_font = convert_ufos_to_glyphs(&context);
 
-            let glyphs_font = convert_ufos_to_glyphs(&sources);
-
+            let output_path =
+                output_path.unwrap_or_else(|| designspace_path.with_extension("glyphs"));
             let plist = glyphs_font.to_plist();
-            fs::write(&output, plist.to_string()).unwrap();
+            fs::write(output_path, plist.to_string()).unwrap();
         }
     }
 }
 
-fn convert_ufos_to_glyphs(sources: &[norad::Font]) -> glyphstool::Font {
+#[derive(Debug)]
+struct DesignspaceContext {
+    designspace: DesignSpaceDocument,
+    ufos: HashMap<String, norad::Font>,
+}
+
+impl DesignspaceContext {
+    fn from_path(designspace_path: &Path) -> Self {
+        let designspace = norad::designspace::DesignSpaceDocument::load(&designspace_path)
+            .expect("Cannot load Designspace.");
+        let unique_filenames: HashSet<String> = HashSet::from_iter(
+            designspace
+                .sources
+                .iter()
+                .map(|source| source.filename.to_string()),
+        );
+        let designspace_dir = designspace_path.parent().unwrap();
+        let ufos = HashMap::from_iter(unique_filenames.into_iter().map(|filename| {
+            (
+                filename.clone(),
+                norad::Font::load(designspace_dir.join(filename)).expect("Could not load UFO"),
+            )
+        }));
+
+        Self { designspace, ufos }
+    }
+}
+
+fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
     let mut font_master: Vec<glyphstool::FontMaster> = Vec::new();
     let mut other_stuff: HashMap<String, Plist> = HashMap::new();
@@ -57,7 +87,7 @@ fn convert_ufos_to_glyphs(sources: &[norad::Font]) -> glyphstool::Font {
 
     let mut glyph_order: Option<Vec<String>> = None;
 
-    for source in sources.iter() {
+    for source in context.ufos.values() {
         if let (None, Some(source_family_name)) = (&family_name, &source.font_info.family_name) {
             family_name.replace(source_family_name.clone());
         }
@@ -81,7 +111,7 @@ fn convert_ufos_to_glyphs(sources: &[norad::Font]) -> glyphstool::Font {
         ) {
             glyph_order.replace(
                 source_glyph_order
-                    .into_iter()
+                    .iter()
                     .map(|v| {
                         v.as_string()
                             .expect("glyphOrder must be list of strings.")
@@ -138,15 +168,13 @@ fn convert_ufos_to_glyphs(sources: &[norad::Font]) -> glyphstool::Font {
                 if !glyph.codepoints.is_empty() {
                     other_stuff.insert(
                         "unicode".into(),
-                        String::from(
-                            glyph
-                                .codepoints
-                                .iter()
-                                .map(|c| format!("{:04X}", c as usize))
-                                .collect::<Vec<_>>()
-                                .join(","),
-                        )
-                        .into(),
+                        glyph
+                            .codepoints
+                            .iter()
+                            .map(|c| format!("{:04X}", c as usize))
+                            .collect::<Vec<_>>()
+                            .join(",")
+                            .into(),
                     );
                 }
 
@@ -268,7 +296,10 @@ fn convert_ufos_to_glyphs(sources: &[norad::Font]) -> glyphstool::Font {
     let glyphs = if let Some(mut glyph_order) = glyph_order {
         let all_glyphs: HashSet<&String> = HashSet::from_iter(glyphs.keys());
         let ordered_glyphs: HashSet<&String> = HashSet::from_iter(&glyph_order);
-        let mut leftovers: Vec<String> = all_glyphs.difference(&ordered_glyphs).map(|n| n.to_string()).collect();
+        let mut leftovers: Vec<String> = all_glyphs
+            .difference(&ordered_glyphs)
+            .map(|n| n.to_string())
+            .collect();
         leftovers.sort();
         glyph_order.extend(leftovers);
 
