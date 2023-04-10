@@ -30,6 +30,8 @@ pub struct Glyph {
 
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Layer {
+    pub name: Option<String>,
+    pub associated_layer_id: Option<String>,
     pub layer_id: String,
     pub width: f64,
     pub paths: Option<Vec<Path>>,
@@ -86,6 +88,10 @@ pub struct FontMaster {
     pub id: String,
     pub weight_value: i64,
     pub width_value: Option<i64>,
+    pub custom_value: Option<i64>,
+    pub custom_value1: Option<i64>,
+    pub custom_value2: Option<i64>,
+    pub custom_value3: Option<i64>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }

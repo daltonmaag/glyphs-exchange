@@ -6,7 +6,8 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use glyphstool::{Layer, Plist, ToPlist};
-use norad::designspace::DesignSpaceDocument;
+use maplit::hashmap;
+use norad::designspace;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -49,14 +50,37 @@ fn main() {
 
 #[derive(Debug)]
 struct DesignspaceContext {
-    designspace: DesignSpaceDocument,
+    designspace: designspace::DesignSpaceDocument,
     ufos: HashMap<String, norad::Font>,
+    ids: HashMap<String, String>,
+}
+
+#[derive(Debug)]
+enum LayerId {
+    Master(String),
+    AssociatedWithMaster(String, String),
 }
 
 impl DesignspaceContext {
     fn from_path(designspace_path: &Path) -> Self {
-        let designspace = norad::designspace::DesignSpaceDocument::load(&designspace_path)
+        let designspace = designspace::DesignSpaceDocument::load(&designspace_path)
             .expect("Cannot load Designspace.");
+
+        // Check that all sources have unique names, otherwise panic.
+        let unique_sources: HashSet<_> = designspace
+            .sources
+            .iter()
+            .map(|source| source.name.as_str())
+            .collect();
+        if unique_sources.len() != designspace.sources.len() {
+            panic!("Designspace sources must have unique names.");
+        }
+
+        // Check that we have at most six axes (Glyphs.app v2.x limitation).
+        if designspace.axes.len() > 6 {
+            panic!("Designspace must have at most six axes.");
+        }
+
         let unique_filenames: HashSet<String> = HashSet::from_iter(
             designspace
                 .sources
@@ -70,10 +94,134 @@ impl DesignspaceContext {
                 norad::Font::load(designspace_dir.join(filename)).expect("Could not load UFO"),
             )
         }));
+        let ids = designspace
+            .sources
+            .iter()
+            .map(|source| (source.name.clone(), uuid::Uuid::new_v4().to_string()))
+            .collect();
 
-        Self { designspace, ufos }
+        Self {
+            designspace,
+            ufos,
+            ids,
+        }
+    }
+
+    fn id_for_source_name(&self, source: &designspace::Source) -> LayerId {
+        if source.layer.is_none() {
+            LayerId::Master(self.ids[&source.name].clone())
+        } else {
+            let parent_source = self
+                .designspace
+                .sources
+                .iter()
+                .find(|parent_source| parent_source.filename == source.filename)
+                .expect("Parent source not found in Designspace.");
+            LayerId::AssociatedWithMaster(
+                self.ids[&parent_source.name].clone(),
+                self.ids[&source.name].clone(),
+            )
+        }
+    }
+
+    // TODO: Fix reliance on the order of dimensions in the location.
+    fn design_location(
+        source: &designspace::Source,
+    ) -> (
+        i64,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+    ) {
+        let location_at = |i: usize| {
+            source
+                .location
+                .get(i)
+                .map(|dim| dim.xvalue.unwrap_or(0.0).round() as i64)
+        };
+        (
+            location_at(0).unwrap_or(0),
+            location_at(1),
+            location_at(2),
+            location_at(3),
+            location_at(4),
+            location_at(5),
+        )
+    }
+
+    fn axis_by_name(&self, name: &str) -> &designspace::Axis {
+        self.designspace
+            .axes
+            .iter()
+            .find(|axis| axis.name == name)
+            .expect("Cannot find axis by name")
+    }
+
+    // TODO: Fix reliance on the order of dimensions in the location and axes.
+    fn axis_location(&self, source: &designspace::Source) -> Plist {
+        let map_backwards = |axis: &designspace::Axis, value: f32| {
+            if let Some(mapping) = &axis.map {
+                mapping
+                    .iter()
+                    .find(|map| map.output == value)
+                    .map(|map| map.input)
+                    .ok_or_else(|| {
+                        format!(
+                            "Could not find exact axis design to user mapping; axis {}, value {}",
+                            &axis.name, value
+                        )
+                    })
+                    .unwrap()
+            } else {
+                value
+            }
+        };
+
+        source
+            .location
+            .iter()
+            .map(|dim| {
+                let axis = self.axis_by_name(&dim.name);
+                let value = map_backwards(axis, dim.xvalue.unwrap_or(0.0));
+                Plist::Dictionary(
+                    vec![
+                        ("Axis".to_string(), Plist::String(axis.name.clone())),
+                        ("Location".to_string(), Plist::Integer(value.round() as i64)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                )
+            })
+            .collect::<Vec<_>>()
+            .into()
+    }
+
+    fn global_axes(&self) -> Plist {
+        self.designspace
+            .axes
+            .iter()
+            .map(|axis| {
+                Plist::Dictionary(
+                    vec![
+                        ("Name".to_string(), Plist::String(axis.name.clone())),
+                        ("Tag".to_string(), Plist::String(axis.tag.clone())),
+                    ]
+                    .into_iter()
+                    .collect(),
+                )
+            })
+            .collect::<Vec<_>>()
+            .into()
     }
 }
+
+// TODO: 
+// * Set master names additionally via "Master Name" custom parameter?
+// * Convert instances and use design
+//   interpolation(Weight|Width|Custom|Custom1|Custom2|Custom3) parameters for
+//   location
 
 fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
@@ -87,82 +235,122 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
     let mut glyph_order: Option<Vec<String>> = None;
 
-    for source in context.ufos.values() {
-        if let (None, Some(source_family_name)) = (&family_name, &source.font_info.family_name) {
-            family_name.replace(source_family_name.clone());
-        }
-        if let (None, Some(source_units_per_em)) = (&units_per_em, &source.font_info.units_per_em) {
-            units_per_em.replace(source_units_per_em.round() as i64);
-        }
-        if let (None, Some(source_version_major)) =
-            (&version_major, &source.font_info.version_major)
-        {
-            version_major.replace(*source_version_major as i64);
-        }
-        if let (None, Some(source_version_minor)) =
-            (&version_minor, &source.font_info.version_minor)
-        {
-            version_minor.replace(*source_version_minor as i64);
-        }
+    
+    for source in context.designspace.sources.iter() {
+        let layer_id = context.id_for_source_name(&source);
+        dbg!((&source.name, &layer_id));
+        let font = &context.ufos[&source.filename];
 
-        if let (None, Some(Some(source_glyph_order))) = (
-            &glyph_order,
-            source.lib.get("public.glyphOrder").map(|v| v.as_array()),
-        ) {
-            glyph_order.replace(
-                source_glyph_order
-                    .iter()
-                    .map(|v| {
-                        v.as_string()
-                            .expect("glyphOrder must be list of strings.")
-                            .to_string()
-                    })
-                    .collect(),
+        if source.layer.is_none() {
+            if let (None, Some(source_family_name)) = (&family_name, &font.font_info.family_name) {
+                family_name.replace(source_family_name.clone());
+            }
+            if let (None, Some(source_units_per_em)) = (&units_per_em, &font.font_info.units_per_em)
+            {
+                units_per_em.replace(source_units_per_em.round() as i64);
+            }
+            if let (None, Some(source_version_major)) =
+                (&version_major, &font.font_info.version_major)
+            {
+                version_major.replace(*source_version_major as i64);
+            }
+            if let (None, Some(source_version_minor)) =
+                (&version_minor, &font.font_info.version_minor)
+            {
+                version_minor.replace(*source_version_minor as i64);
+            }
+
+            if let (None, Some(Some(source_glyph_order))) = (
+                &glyph_order,
+                font.lib.get("public.glyphOrder").map(|v| v.as_array()),
+            ) {
+                glyph_order.replace(
+                    source_glyph_order
+                        .iter()
+                        .map(|v| {
+                            v.as_string()
+                                .expect("glyphOrder must be list of strings.")
+                                .to_string()
+                        })
+                        .collect(),
+                );
+            }
+
+            let LayerId::Master(id) = &layer_id else {
+                panic!("Master does not seem to be a master?!")
+            };
+            let (
+                weight_value,
+                width_value,
+                custom_value,
+                custom_value1,
+                custom_value2,
+                custom_value3,
+            ) = DesignspaceContext::design_location(&source);
+
+            let mut other_stuff: HashMap<String, Plist> = HashMap::new();
+
+            let layer_name = font.font_info.style_name.clone();
+            let ascender = font
+                .font_info
+                .ascender
+                .map(|v| v.round() as i64)
+                .unwrap_or(800);
+            let cap_height = font
+                .font_info
+                .cap_height
+                .map(|v| v.round() as i64)
+                .unwrap_or(700);
+            let descender = font
+                .font_info
+                .descender
+                .map(|v| v.round() as i64)
+                .unwrap_or(-200);
+            let x_height = font
+                .font_info
+                .x_height
+                .map(|v| v.round() as i64)
+                .unwrap_or(500);
+
+            if let Some(layer_name) = layer_name {
+                other_stuff.insert("custom".into(), layer_name.into());
+            }
+            other_stuff.insert("ascender".into(), ascender.into());
+            other_stuff.insert("capHeight".into(), cap_height.into());
+            other_stuff.insert("descender".into(), descender.into());
+            other_stuff.insert("xHeight".into(), x_height.into());
+
+            let mut custom_parameters: Vec<Plist> = Vec::new();
+            custom_parameters.push(
+                hashmap! {
+                    "name".into() => String::from("Axis Location").into(),
+                    "value".into() => context.axis_location(&source).into(),
+                }
+                .into(),
             );
+            other_stuff.insert("customParameters".into(), custom_parameters.into());
+
+            font_master.push(glyphstool::FontMaster {
+                id: id.clone(),
+                weight_value,
+                width_value,
+                custom_value,
+                custom_value1,
+                custom_value2,
+                custom_value3,
+                other_stuff,
+            });
         }
 
-        let id = uuid::Uuid::new_v4().to_string();
-        let weight_value: i64 = source.font_info.open_type_os2_weight_class.unwrap_or(400) as i64;
-        let mut other_stuff: HashMap<String, Plist> = HashMap::new();
+        let ufo_layer = if source.layer.is_some() {
+            font.layers
+                .get(&source.layer.as_ref().unwrap())
+                .expect("Cannot find layer.")
+        } else {
+            font.default_layer()
+        };
 
-        let layer_name = source.font_info.style_name.clone();
-        let ascender = source
-            .font_info
-            .ascender
-            .map(|v| v.round() as i64)
-            .unwrap_or(800);
-        let cap_height = source
-            .font_info
-            .cap_height
-            .map(|v| v.round() as i64)
-            .unwrap_or(700);
-        let descender = source
-            .font_info
-            .descender
-            .map(|v| v.round() as i64)
-            .unwrap_or(-200);
-        let x_height = source
-            .font_info
-            .x_height
-            .map(|v| v.round() as i64)
-            .unwrap_or(500);
-
-        if let Some(layer_name) = layer_name {
-            other_stuff.insert("custom".into(), layer_name.into());
-        }
-        other_stuff.insert("ascender".into(), ascender.into());
-        other_stuff.insert("capHeight".into(), cap_height.into());
-        other_stuff.insert("descender".into(), descender.into());
-        other_stuff.insert("xHeight".into(), x_height.into());
-
-        font_master.push(glyphstool::FontMaster {
-            id: id.clone(),
-            weight_value,
-            width_value: None,
-            other_stuff,
-        });
-
-        for glyph in source.layers.default_layer().iter() {
+        for glyph in ufo_layer.iter() {
             let converted_glyph = glyphs.entry(glyph.name().to_string()).or_insert_with(|| {
                 let mut other_stuff: HashMap<String, Plist> = Default::default();
                 if !glyph.codepoints.is_empty() {
@@ -185,7 +373,12 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 }
             });
 
-            let layer_id = id.clone();
+            let (associated_layer_id, layer_id) = match &layer_id {
+                LayerId::Master(id) => (None, id.clone()),
+                LayerId::AssociatedWithMaster(parent_id, child_id) => {
+                    (Some(parent_id.clone()), child_id.clone())
+                }
+            };
             let width = glyph.width;
             let mut paths: Vec<glyphstool::Path> = Vec::new();
             let mut components: Vec<glyphstool::Component> = Vec::new();
@@ -250,6 +443,8 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
             }
 
             converted_glyph.layers.push(Layer {
+                name: source.layer.clone(),
+                associated_layer_id,
                 layer_id,
                 width,
                 paths: if !paths.is_empty() { Some(paths) } else { None },
@@ -279,6 +474,13 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     other_stuff.insert("versionMinor".into(), version_minor.unwrap_or(0).into());
 
     let mut custom_parameters: Vec<Plist> = Vec::new();
+    custom_parameters.push(
+        hashmap! {
+            "name".into() => String::from("Axes").into(),
+            "value".into() => context.global_axes().into(),
+        }
+        .into(),
+    );
     if let Some(glyph_order) = &glyph_order {
         let glyph_order_plist: Vec<Plist> =
             glyph_order.iter().map(|n| n.to_string().into()).collect();
@@ -288,9 +490,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
         ]);
         custom_parameters.push(glyph_order_plist.into());
     }
-    if !custom_parameters.is_empty() {
-        other_stuff.insert("customParameters".into(), custom_parameters.into());
-    }
+    other_stuff.insert("customParameters".into(), custom_parameters.into());
 
     // Glyphs need to be sorted like the glyphOrder.
     let glyphs = if let Some(mut glyph_order) = glyph_order {
