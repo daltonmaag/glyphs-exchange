@@ -61,9 +61,18 @@ enum LayerId {
     AssociatedWithMaster(String, String),
 }
 
+type DesignLocation = (
+    i64,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+);
+
 impl DesignspaceContext {
     fn from_path(designspace_path: &Path) -> Self {
-        let designspace = designspace::DesignSpaceDocument::load(&designspace_path)
+        let designspace = designspace::DesignSpaceDocument::load(designspace_path)
             .expect("Cannot load Designspace.");
 
         // Check that all sources have unique names, otherwise panic.
@@ -97,7 +106,12 @@ impl DesignspaceContext {
         let ids = designspace
             .sources
             .iter()
-            .map(|source| (source.name.clone(), uuid::Uuid::new_v4().to_string()))
+            .map(|source| {
+                (
+                    source.name.clone(),
+                    uuid::Uuid::new_v4().to_string().to_uppercase(),
+                )
+            })
             .collect();
 
         Self {
@@ -125,16 +139,7 @@ impl DesignspaceContext {
     }
 
     // TODO: Fix reliance on the order of dimensions in the location.
-    fn design_location(
-        source: &designspace::Source,
-    ) -> (
-        i64,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-    ) {
+    fn design_location(source: &designspace::Source) -> DesignLocation {
         let location_at = |i: usize| {
             source
                 .location
@@ -217,7 +222,7 @@ impl DesignspaceContext {
     }
 }
 
-// TODO: 
+// TODO:
 // * Set master names additionally via "Master Name" custom parameter?
 // * Convert instances and use design
 //   interpolation(Weight|Width|Custom|Custom1|Custom2|Custom3) parameters for
@@ -235,10 +240,8 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
     let mut glyph_order: Option<Vec<String>> = None;
 
-    
     for source in context.designspace.sources.iter() {
-        let layer_id = context.id_for_source_name(&source);
-        dbg!((&source.name, &layer_id));
+        let layer_id = context.id_for_source_name(source);
         let font = &context.ufos[&source.filename];
 
         if source.layer.is_none() {
@@ -286,7 +289,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 custom_value1,
                 custom_value2,
                 custom_value3,
-            ) = DesignspaceContext::design_location(&source);
+            ) = DesignspaceContext::design_location(source);
 
             let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
@@ -324,7 +327,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
             custom_parameters.push(
                 hashmap! {
                     "name".into() => String::from("Axis Location").into(),
-                    "value".into() => context.axis_location(&source).into(),
+                    "value".into() => context.axis_location(source),
                 }
                 .into(),
             );
@@ -344,7 +347,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
         let ufo_layer = if source.layer.is_some() {
             font.layers
-                .get(&source.layer.as_ref().unwrap())
+                .get(source.layer.as_ref().unwrap())
                 .expect("Cannot find layer.")
         } else {
             font.default_layer()
@@ -373,7 +376,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 }
             });
 
-            let (associated_layer_id, layer_id) = match &layer_id {
+            let (associated_master_id, layer_id) = match &layer_id {
                 LayerId::Master(id) => (None, id.clone()),
                 LayerId::AssociatedWithMaster(parent_id, child_id) => {
                     (Some(parent_id.clone()), child_id.clone())
@@ -444,7 +447,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
             converted_glyph.layers.push(Layer {
                 name: source.layer.clone(),
-                associated_layer_id,
+                associated_master_id,
                 layer_id,
                 width,
                 paths: if !paths.is_empty() { Some(paths) } else { None },
@@ -477,7 +480,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     custom_parameters.push(
         hashmap! {
             "name".into() => String::from("Axes").into(),
-            "value".into() => context.global_axes().into(),
+            "value".into() => context.global_axes(),
         }
         .into(),
     );

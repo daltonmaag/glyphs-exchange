@@ -31,7 +31,7 @@ pub struct Glyph {
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Layer {
     pub name: Option<String>,
-    pub associated_layer_id: Option<String>,
+    pub associated_master_id: Option<String>,
     pub layer_id: String,
     pub width: f64,
     pub paths: Option<Vec<Path>>,
