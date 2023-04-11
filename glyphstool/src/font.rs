@@ -16,6 +16,7 @@ use crate::to_plist::ToPlist;
 pub struct Font {
     pub glyphs: Vec<Glyph>,
     pub font_master: Vec<FontMaster>,
+    pub instances: Option<Vec<Instance>>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }
@@ -92,6 +93,19 @@ pub struct FontMaster {
     pub custom_value1: Option<i64>,
     pub custom_value2: Option<i64>,
     pub custom_value3: Option<i64>,
+    #[rest]
+    pub other_stuff: HashMap<String, Plist>,
+}
+
+#[derive(Debug, FromPlist, ToPlist)]
+pub struct Instance {
+    pub name: String,
+    pub interpolation_weight: i64,
+    pub interpolation_width: Option<i64>,
+    pub interpolation_custom: Option<i64>,
+    pub interpolation_custom1: Option<i64>,
+    pub interpolation_custom2: Option<i64>,
+    pub interpolation_custom3: Option<i64>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }

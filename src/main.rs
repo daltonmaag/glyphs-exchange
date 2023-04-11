@@ -522,5 +522,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
         glyphs,
         font_master,
         other_stuff,
+        instances: None,
     }
 }
