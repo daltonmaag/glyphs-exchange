@@ -8,7 +8,7 @@ mod region;
 mod stretch;
 mod to_plist;
 
-pub use font::{Anchor, Component, Font, FontMaster, Glyph, Layer, Node, NodeType, Path};
+pub use font::{Anchor, Component, Font, FontMaster, Glyph, Instance, Layer, Node, NodeType, Path};
 pub use from_plist::FromPlist;
 pub use plist::Plist;
 pub use region::Region;

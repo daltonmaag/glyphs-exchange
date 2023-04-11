@@ -467,6 +467,11 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
         }
     }
 
+    let mut instances: Vec<glyphstool::Instance> = Vec::new();
+    for instance in context.designspace.instances.iter() {
+        // ...
+    }
+
     other_stuff.insert(".appVersion".into(), String::from("1361").into());
     other_stuff.insert(
         "familyName".into(),
@@ -522,6 +527,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
         glyphs,
         font_master,
         other_stuff,
-        instances: None,
+        instances: Some(instances),
     }
 }
