@@ -139,10 +139,9 @@ impl DesignspaceContext {
     }
 
     // TODO: Fix reliance on the order of dimensions in the location.
-    fn design_location(source: &designspace::Source) -> DesignLocation {
+    fn design_location(location: &[designspace::Dimension]) -> DesignLocation {
         let location_at = |i: usize| {
-            source
-                .location
+            location
                 .get(i)
                 .map(|dim| dim.xvalue.unwrap_or(0.0).round() as i64)
         };
@@ -289,7 +288,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 custom_value1,
                 custom_value2,
                 custom_value3,
-            ) = DesignspaceContext::design_location(source);
+            ) = DesignspaceContext::design_location(&source.location);
 
             let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
@@ -469,7 +468,29 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
     let mut instances: Vec<glyphstool::Instance> = Vec::new();
     for instance in context.designspace.instances.iter() {
-        // ...
+        let name = instance.stylename.clone().unwrap_or_default();
+        let (
+            interpolation_weight,
+            interpolation_width,
+            interpolation_custom,
+            interpolation_custom1,
+            interpolation_custom2,
+            interpolation_custom3,
+        ) = DesignspaceContext::design_location(&instance.location);
+
+        instances.push(glyphstool::Instance {
+            name,
+            interpolation_weight,
+            interpolation_width,
+            interpolation_custom,
+            interpolation_custom1,
+            interpolation_custom2,
+            interpolation_custom3,
+            is_bold: (),
+            is_italic: (),
+            link_style: (),
+            other_stuff: (),
+        })
     }
 
     other_stuff.insert(".appVersion".into(), String::from("1361").into());
