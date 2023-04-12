@@ -100,12 +100,12 @@ pub struct FontMaster {
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct Instance {
     pub name: String,
-    pub interpolation_weight: i64,
-    pub interpolation_width: Option<i64>,
-    pub interpolation_custom: Option<i64>,
-    pub interpolation_custom1: Option<i64>,
-    pub interpolation_custom2: Option<i64>,
-    pub interpolation_custom3: Option<i64>,
+    pub interpolation_weight: f64,
+    pub interpolation_width: Option<f64>,
+    pub interpolation_custom: Option<f64>,
+    pub interpolation_custom1: Option<f64>,
+    pub interpolation_custom2: Option<f64>,
+    pub interpolation_custom3: Option<f64>,
     pub is_bold: Option<bool>,
     pub is_italic: Option<bool>,
     pub link_style: Option<String>,

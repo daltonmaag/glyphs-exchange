@@ -70,6 +70,15 @@ type DesignLocation = (
     Option<i64>,
 );
 
+type InstanceLocation = (
+    f64,
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+    Option<f64>,
+);
+
 impl DesignspaceContext {
     fn from_path(designspace_path: &Path) -> Self {
         let designspace = designspace::DesignSpaceDocument::load(designspace_path)
@@ -155,6 +164,18 @@ impl DesignspaceContext {
         )
     }
 
+    fn design_location_float(location: &[designspace::Dimension]) -> InstanceLocation {
+        let location_at = |i: usize| location.get(i).map(|dim| dim.xvalue.unwrap_or(0.0) as f64);
+        (
+            location_at(0).unwrap_or(0.0),
+            location_at(1),
+            location_at(2),
+            location_at(3),
+            location_at(4),
+            location_at(5),
+        )
+    }
+
     fn axis_by_name(&self, name: &str) -> &designspace::Axis {
         self.designspace
             .axes
@@ -220,12 +241,6 @@ impl DesignspaceContext {
             .into()
     }
 }
-
-// TODO:
-// * Set master names additionally via "Master Name" custom parameter?
-// * Convert instances and use design
-//   interpolation(Weight|Width|Custom|Custom1|Custom2|Custom3) parameters for
-//   location
 
 fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
@@ -476,7 +491,22 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
             interpolation_custom1,
             interpolation_custom2,
             interpolation_custom3,
-        ) = DesignspaceContext::design_location(&instance.location);
+        ) = DesignspaceContext::design_location_float(&instance.location);
+
+        // TODO: make norad::designspace use proper ufo type
+        let (is_bold, is_italic) = match &instance.stylemapstylename {
+            Some(style) => match style.as_str() {
+                "regular" => (false, false),
+                "bold" => (true, false),
+                "italic" => (false, true),
+                "bold italic" => (true, true),
+                _ => panic!("Unrecognized style map style name"),
+            },
+            None => (false, false),
+        };
+
+        let link_style = instance.stylemapfamilyname.clone();
+        let other_stuff: HashMap<String, Plist> = HashMap::new();
 
         instances.push(glyphstool::Instance {
             name,
@@ -486,10 +516,10 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
             interpolation_custom1,
             interpolation_custom2,
             interpolation_custom3,
-            is_bold: (),
-            is_italic: (),
-            link_style: (),
-            other_stuff: (),
+            is_bold: Some(is_bold),
+            is_italic: Some(is_italic),
+            link_style,
+            other_stuff,
         })
     }
 
