@@ -246,3 +246,20 @@ impl Path {
         self.nodes.reverse();
     }
 }
+
+impl FontMaster {
+    pub fn name(&self) -> &str {
+        // TODO: Make Master Name the full source name?
+        self.other_stuff
+            .get("custom")
+            .map(|c| c.as_str().expect("Master 'custom' field is not a string"))
+            .or_else(|| {
+                self.other_stuff
+                    .get("customParameters")
+                    .and_then(|cp| cp.as_dict())
+                    .and_then(|cp| cp.get("Master Name"))
+                    .and_then(|n| n.as_str())
+            })
+            .expect("Cannot determine name for master")
+    }
+}
