@@ -177,3 +177,16 @@ fn run_ufonormalizer(ufo_path: &Path) {
         .output()
         .expect("failed to run ufonormalizer");
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn load_file() {
+//         let _ = glyphstool::Font::load(Path::new(
+//             "../aktiv-grotesk-vf/sources/AktivGroteskVF_WghtWdthItal.glyphs",
+//         ))
+//         .unwrap();
+//     }
+// }

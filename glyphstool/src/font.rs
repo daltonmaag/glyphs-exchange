@@ -24,7 +24,9 @@ pub struct Font {
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Glyph {
     pub layers: Vec<Layer>,
-    pub glyphname: String,
+    // TODO: Find a way to deserialize this separately; the name `infinity` will
+    //       be interpreted as a number and will crash parsing.
+    // pub glyphname: String,
     pub left_kerning_group: Option<String>,
     pub right_kerning_group: Option<String>,
     #[rest]
@@ -89,7 +91,7 @@ pub struct GuideLine {
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct FontMaster {
     pub id: String,
-    pub weight_value: i64,
+    pub weight_value: Option<i64>,
     pub width_value: Option<i64>,
     pub custom_value: Option<i64>,
     pub custom_value1: Option<i64>,
@@ -102,7 +104,7 @@ pub struct FontMaster {
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct Instance {
     pub name: String,
-    pub interpolation_weight: f64,
+    pub interpolation_weight: Option<f64>,
     pub interpolation_width: Option<f64>,
     pub interpolation_custom: Option<f64>,
     pub interpolation_custom1: Option<f64>,
@@ -122,13 +124,13 @@ impl Font {
         Ok(FromPlist::from_plist(plist))
     }
 
-    pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
-        self.glyphs.iter().find(|g| g.glyphname == glyphname)
-    }
+    // pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
+    //     self.glyphs.iter().find(|g| g.glyphname == glyphname)
+    // }
 
-    pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
-        self.glyphs.iter_mut().find(|g| g.glyphname == glyphname)
-    }
+    // pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
+    //     self.glyphs.iter_mut().find(|g| g.glyphname == glyphname)
+    // }
 }
 
 impl Glyph {

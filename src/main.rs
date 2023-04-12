@@ -368,7 +368,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
             font_master.push(glyphstool::FontMaster {
                 id: id.clone(),
-                weight_value,
+                weight_value: Some(weight_value),
                 width_value,
                 custom_value,
                 custom_value1,
@@ -388,7 +388,9 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
         for glyph in ufo_layer.iter() {
             let converted_glyph = glyphs.entry(glyph.name().to_string()).or_insert_with(|| {
-                let mut other_stuff: HashMap<String, Plist> = Default::default();
+                let mut other_stuff: HashMap<String, Plist> = hashmap! {
+                    "glyphname".into() => glyph.name().to_string().into()
+                };
                 if !glyph.codepoints.is_empty() {
                     other_stuff.insert(
                         "unicode".into(),
@@ -404,7 +406,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
                 glyphstool::Glyph {
                     layers: Default::default(),
-                    glyphname: glyph.name().to_string(),
                     other_stuff,
                     left_kerning_group: None,
                     right_kerning_group: None,
@@ -531,7 +532,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
         instances.push(glyphstool::Instance {
             name,
-            interpolation_weight,
+            interpolation_weight: Some(interpolation_weight),
             interpolation_width,
             interpolation_custom,
             interpolation_custom1,
