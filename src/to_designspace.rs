@@ -57,7 +57,7 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
         .ufo_mapping
         .into_par_iter()
         .for_each(|(ufo_path, layer_ids)| {
-            let ufo_path = designspace_path.join(ufo_path);
+            let ufo_path = designspace_path.parent().unwrap().join(ufo_path);
             let mut ufo = norad::Font::load(&ufo_path).expect("Cannot load UFO");
 
             for glyph in context.font.glyphs.iter() {
@@ -77,7 +77,7 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                     };
 
                     let ufo_glyph = ufo_layer
-                        .get_glyph_mut(glyph.glyphname.as_str())
+                        .get_glyph_mut(glyph.name())
                         .expect("Can't find glyph in UFO");
                     let converted_glyph = convert_glyphs_glyph_to_ufo_glyph(&layer);
                     ufo_glyph.anchors = converted_glyph.anchors;
@@ -127,9 +127,12 @@ fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphstool::Layer) -> norad::Glyph 
                 })
                 .collect();
             if !path.closed {
-                points.rotate_right(1);
                 assert!(points[0].typ == norad::PointType::Line && !points[0].smooth);
                 points[0].typ = norad::PointType::Move;
+            } else {
+                // In Glyphs.app, the starting node of a closed contour is
+                // always stored at the end of the nodes list.
+                points.rotate_right(1);
             }
 
             ufo_glyph

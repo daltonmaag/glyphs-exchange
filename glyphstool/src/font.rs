@@ -137,6 +137,18 @@ impl Glyph {
     pub fn get_layer(&self, layer_id: &str) -> Option<&Layer> {
         self.layers.iter().find(|l| l.layer_id == layer_id)
     }
+
+    pub fn name(&self) -> &str {
+        match self.other_stuff.get("glyphname").unwrap() {
+            Plist::String(s) => s.as_str(),
+            Plist::Float(f) => if f.is_infinite() {
+                "infinity"
+            } else {
+                panic!("Glyph name is misparsed as float, but isn't infinity?")
+            },
+            _ => panic!("Cannot parse glyphname")
+        }
+    }
 }
 
 impl FromPlist for Node {
