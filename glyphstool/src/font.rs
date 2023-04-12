@@ -25,6 +25,8 @@ pub struct Font {
 pub struct Glyph {
     pub layers: Vec<Layer>,
     pub glyphname: String,
+    pub left_kerning_group: Option<String>,
+    pub right_kerning_group: Option<String>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }

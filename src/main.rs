@@ -387,6 +387,8 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                     layers: Default::default(),
                     glyphname: glyph.name().to_string(),
                     other_stuff,
+                    left_kerning_group: None,
+                    right_kerning_group: None,
                 }
             });
 
