@@ -9,6 +9,8 @@ use glyphstool::{Layer, Plist, ToPlist};
 use maplit::hashmap;
 use norad::designspace;
 
+pub mod to_designspace;
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -27,6 +29,15 @@ enum Commands {
         /// Designspace).
         output_path: Option<PathBuf>,
     },
+    Glyphs2ufo {
+        /// Source Glyphs.app file to convert.
+        #[arg(required = true)]
+        glyphs_path: PathBuf,
+
+        /// The path to the Designspace file to write (default: next to the input
+        /// Glyphs.app).
+        designspace_path: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -44,6 +55,14 @@ fn main() {
                 output_path.unwrap_or_else(|| designspace_path.with_extension("glyphs"));
             let plist = glyphs_font.to_plist();
             fs::write(output_path, plist.to_string()).unwrap();
+        }
+        Commands::Glyphs2ufo {
+            glyphs_path,
+            designspace_path,
+        } => {
+            let designspace_path =
+                designspace_path.unwrap_or_else(|| glyphs_path.with_extension("designspace"));
+            to_designspace::command_to_designspace(&glyphs_path, &designspace_path);
         }
     }
 }
@@ -252,6 +271,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     let mut version_major: Option<i64> = None;
     let mut version_minor: Option<i64> = None;
 
+    let mut disables_automatic_alignment = None;
     let mut glyph_order: Option<Vec<String>> = None;
 
     for source in context.designspace.sources.iter() {
@@ -275,6 +295,15 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 (&version_minor, &font.font_info.version_minor)
             {
                 version_minor.replace(*source_version_minor as i64);
+            }
+
+            if let (None, Some(source_disables_automatic_alignment)) = (
+                disables_automatic_alignment,
+                font.lib
+                    .get("com.schriftgestaltung.customParameter.GSFont.disablesAutomaticAlignment"),
+            ) {
+                disables_automatic_alignment
+                    .replace(source_disables_automatic_alignment.as_boolean().unwrap());
             }
 
             if let (None, Some(Some(source_glyph_order))) = (
@@ -307,7 +336,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
             let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
-            let layer_name = font.font_info.style_name.clone();
             let ascender = font
                 .font_info
                 .ascender
@@ -329,9 +357,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 .map(|v| v.round() as i64)
                 .unwrap_or(500);
 
-            if let Some(layer_name) = layer_name {
-                other_stuff.insert("custom".into(), layer_name.into());
-            }
             other_stuff.insert("ascender".into(), ascender.into());
             other_stuff.insert("capHeight".into(), cap_height.into());
             other_stuff.insert("descender".into(), descender.into());
@@ -345,11 +370,26 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 }
                 .into(),
             );
+            // The "Master Name" custom parameter is the only place where it
+            // stays safe, because Glyphs leaves out fields in FontMaster it
+            // thinks it can regenerate. GlyphsLib uses the style name rather
+            // than source name for it.
+            let source_name = source
+                .stylename
+                .as_ref()
+                .expect("Source must have a stylename");
+            custom_parameters.push(
+                hashmap! {
+                    "name".into() => String::from("Master Name").into(),
+                    "value".into() => source_name.to_string().into(),
+                }
+                .into(),
+            );
             other_stuff.insert("customParameters".into(), custom_parameters.into());
 
             font_master.push(glyphstool::FontMaster {
                 id: id.clone(),
-                weight_value,
+                weight_value: Some(weight_value),
                 width_value,
                 custom_value,
                 custom_value1,
@@ -369,7 +409,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
         for glyph in ufo_layer.iter() {
             let converted_glyph = glyphs.entry(glyph.name().to_string()).or_insert_with(|| {
-                let mut other_stuff: HashMap<String, Plist> = Default::default();
+                let mut other_stuff: HashMap<String, Plist> = HashMap::new();
                 if !glyph.codepoints.is_empty() {
                     other_stuff.insert(
                         "unicode".into(),
@@ -384,9 +424,9 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 }
 
                 glyphstool::Glyph {
+                    glyphname: glyph.name().to_string().into(),
                     layers: Default::default(),
-                    glyphname: glyph.name().to_string(),
-                    other_stuff,
+                    other_stuff: Default::default(),
                     left_kerning_group: None,
                     right_kerning_group: None,
                 }
@@ -512,7 +552,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
         instances.push(glyphstool::Instance {
             name,
-            interpolation_weight,
+            interpolation_weight: Some(interpolation_weight),
             interpolation_width,
             interpolation_custom,
             interpolation_custom1,
@@ -576,10 +616,15 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
         glyphs.into_values().collect::<Vec<_>>()
     };
 
+    if disables_automatic_alignment.is_none() {
+        disables_automatic_alignment = Some(true);
+    }
+
     glyphstool::Font {
         glyphs,
         font_master,
         other_stuff,
+        disables_automatic_alignment,
         instances: Some(instances),
     }
 }

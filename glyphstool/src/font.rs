@@ -17,6 +17,7 @@ pub struct Font {
     pub glyphs: Vec<Glyph>,
     pub font_master: Vec<FontMaster>,
     pub instances: Option<Vec<Instance>>,
+    pub disables_automatic_alignment: Option<bool>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }
@@ -24,7 +25,9 @@ pub struct Font {
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Glyph {
     pub layers: Vec<Layer>,
-    pub glyphname: String,
+    /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
+    /// quotes around the name "infinity", making it parse as a float instead.
+    pub glyphname: Plist,
     pub left_kerning_group: Option<String>,
     pub right_kerning_group: Option<String>,
     #[rest]
@@ -89,7 +92,7 @@ pub struct GuideLine {
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct FontMaster {
     pub id: String,
-    pub weight_value: i64,
+    pub weight_value: Option<i64>,
     pub width_value: Option<i64>,
     pub custom_value: Option<i64>,
     pub custom_value1: Option<i64>,
@@ -102,7 +105,7 @@ pub struct FontMaster {
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct Instance {
     pub name: String,
-    pub interpolation_weight: f64,
+    pub interpolation_weight: Option<f64>,
     pub interpolation_width: Option<f64>,
     pub interpolation_custom: Option<f64>,
     pub interpolation_custom1: Option<f64>,
@@ -123,17 +126,31 @@ impl Font {
     }
 
     pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
-        self.glyphs.iter().find(|g| g.glyphname == glyphname)
+        self.glyphs.iter().find(|g| g.name() == glyphname)
     }
 
     pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
-        self.glyphs.iter_mut().find(|g| g.glyphname == glyphname)
+        self.glyphs.iter_mut().find(|g| g.name() == glyphname)
     }
 }
 
 impl Glyph {
     pub fn get_layer(&self, layer_id: &str) -> Option<&Layer> {
         self.layers.iter().find(|l| l.layer_id == layer_id)
+    }
+
+    pub fn name(&self) -> &str {
+        match &self.glyphname {
+            Plist::String(s) => s.as_str(),
+            Plist::Float(f) => {
+                if f.is_infinite() {
+                    "infinity"
+                } else {
+                    panic!("Glyph name is misparsed as float, but isn't infinity?")
+                }
+            }
+            _ => panic!("Cannot parse glyphname"),
+        }
     }
 }
 
@@ -244,5 +261,25 @@ impl Path {
 
     pub fn reverse(&mut self) {
         self.nodes.reverse();
+    }
+}
+
+impl FontMaster {
+    pub fn name(&self) -> &str {
+        self.other_stuff
+            .get("customParameters")
+            .and_then(|cps| {
+                Some(
+                    cps.as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|cp| cp.as_dict().unwrap()),
+                )
+            })
+            .and_then(|mut cps| {
+                cps.find(|cp| cp.get("name").unwrap().as_str().unwrap() == "Master Name")
+            })
+            .and_then(|cp| cp.get("value").unwrap().as_str())
+            .expect("Cannot determine name for master")
     }
 }

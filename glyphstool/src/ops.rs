@@ -9,15 +9,16 @@ pub fn merge(font: &mut Font, other: &Font, layer_id: &str) {
     for glyph in &other.glyphs {
         for layer in &glyph.layers {
             if layer.layer_id == layer_id {
-                map.insert(glyph.glyphname.to_owned(), layer);
+                map.insert(glyph.name().to_owned(), layer);
             }
         }
     }
 
     for glyph in &mut font.glyphs {
+        let glyph_name = glyph.name().to_string();
         for layer in &mut glyph.layers {
             if layer.layer_id == layer_id {
-                *layer = (*map[&glyph.glyphname]).clone();
+                *layer = (*map[&glyph_name]).clone();
             }
         }
     }
