@@ -24,6 +24,7 @@ pub struct Font {
 
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Glyph {
+    pub unicode: Option<String>,
     pub layers: Vec<Layer>,
     /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
     /// quotes around the name "infinity", making it parse as a float instead.
