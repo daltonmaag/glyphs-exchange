@@ -356,6 +356,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 .x_height
                 .map(|v| v.round() as i64)
                 .unwrap_or(500);
+            let italic_angle = font.font_info.italic_angle.map(|v| -v);
 
             other_stuff.insert("ascender".into(), ascender.into());
             other_stuff.insert("capHeight".into(), cap_height.into());
@@ -389,6 +390,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
             font_master.push(glyphstool::FontMaster {
                 id: id.clone(),
+                italic_angle,
                 weight_value: Some(weight_value),
                 width_value,
                 custom_value,
