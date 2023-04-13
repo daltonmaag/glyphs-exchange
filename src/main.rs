@@ -22,7 +22,7 @@ enum Commands {
 
         /// The path to the Glyphs.app file to write (default: next to the input
         /// Designspace).
-        output_path: Option<PathBuf>,
+        glyphs_path: Option<PathBuf>,
     },
     Glyphs2ufo {
         /// Source Glyphs.app file to convert.
@@ -41,15 +41,14 @@ fn main() {
     match cli.command {
         Commands::Ufo2glyphs {
             designspace_path,
-            output_path,
+            glyphs_path,
         } => {
-            let context = to_glyphs::DesignspaceContext::from_path(&designspace_path);
-            let glyphs_font = to_glyphs::convert_ufos_to_glyphs(&context);
+            let glyphs_font = to_glyphs::command_to_glyphs(&designspace_path);
 
-            let output_path =
-                output_path.unwrap_or_else(|| designspace_path.with_extension("glyphs"));
             let plist = glyphs_font.to_plist();
-            fs::write(output_path, plist.to_string()).unwrap();
+            let glyphs_path =
+                glyphs_path.unwrap_or_else(|| designspace_path.with_extension("glyphs"));
+            fs::write(glyphs_path, plist.to_string()).unwrap();
         }
         Commands::Glyphs2ufo {
             glyphs_path,

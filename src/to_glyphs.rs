@@ -201,7 +201,9 @@ impl DesignspaceContext {
     }
 }
 
-pub(crate) fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
+pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
+    let context = DesignspaceContext::from_path(&designspace_path);
+
     let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
     let mut font_master: Vec<glyphstool::FontMaster> = Vec::new();
     let mut other_stuff: HashMap<String, Plist> = HashMap::new();
