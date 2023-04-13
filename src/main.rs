@@ -326,7 +326,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
 
             let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
-            let layer_name = font.font_info.style_name.clone();
             let ascender = font
                 .font_info
                 .ascender
@@ -348,9 +347,6 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 .map(|v| v.round() as i64)
                 .unwrap_or(500);
 
-            if let Some(layer_name) = layer_name {
-                other_stuff.insert("custom".into(), layer_name.into());
-            }
             other_stuff.insert("ascender".into(), ascender.into());
             other_stuff.insert("capHeight".into(), cap_height.into());
             other_stuff.insert("descender".into(), descender.into());
@@ -361,6 +357,21 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 hashmap! {
                     "name".into() => String::from("Axis Location").into(),
                     "value".into() => context.axis_location(source),
+                }
+                .into(),
+            );
+            // The "Master Name" custom parameter is the only place where it
+            // stays safe, because Glyphs leaves out fields in FontMaster it
+            // thinks it can regenerate. GlyphsLib uses the style name rather
+            // than source name for it.
+            let source_name = source
+                .stylename
+                .as_ref()
+                .expect("Source must have a stylename");
+            custom_parameters.push(
+                hashmap! {
+                    "name".into() => String::from("Master Name").into(),
+                    "value".into() => source_name.to_string().into(),
                 }
                 .into(),
             );

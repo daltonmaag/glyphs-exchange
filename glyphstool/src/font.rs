@@ -124,13 +124,13 @@ impl Font {
         Ok(FromPlist::from_plist(plist))
     }
 
-    // pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
-    //     self.glyphs.iter().find(|g| g.glyphname == glyphname)
-    // }
+    pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
+        self.glyphs.iter().find(|g| g.name() == glyphname)
+    }
 
-    // pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
-    //     self.glyphs.iter_mut().find(|g| g.glyphname == glyphname)
-    // }
+    pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
+        self.glyphs.iter_mut().find(|g| g.name() == glyphname)
+    }
 }
 
 impl Glyph {
@@ -141,12 +141,14 @@ impl Glyph {
     pub fn name(&self) -> &str {
         match self.other_stuff.get("glyphname").unwrap() {
             Plist::String(s) => s.as_str(),
-            Plist::Float(f) => if f.is_infinite() {
-                "infinity"
-            } else {
-                panic!("Glyph name is misparsed as float, but isn't infinity?")
-            },
-            _ => panic!("Cannot parse glyphname")
+            Plist::Float(f) => {
+                if f.is_infinite() {
+                    "infinity"
+                } else {
+                    panic!("Glyph name is misparsed as float, but isn't infinity?")
+                }
+            }
+            _ => panic!("Cannot parse glyphname"),
         }
     }
 }
@@ -263,17 +265,20 @@ impl Path {
 
 impl FontMaster {
     pub fn name(&self) -> &str {
-        // TODO: Make Master Name the full source name?
         self.other_stuff
-            .get("custom")
-            .map(|c| c.as_str().expect("Master 'custom' field is not a string"))
-            .or_else(|| {
-                self.other_stuff
-                    .get("customParameters")
-                    .and_then(|cp| cp.as_dict())
-                    .and_then(|cp| cp.get("Master Name"))
-                    .and_then(|n| n.as_str())
+            .get("customParameters")
+            .and_then(|cps| {
+                Some(
+                    cps.as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|cp| cp.as_dict().unwrap()),
+                )
             })
+            .and_then(|mut cps| {
+                cps.find(|cp| cp.get("name").unwrap().as_str().unwrap() == "Master Name")
+            })
+            .and_then(|cp| cp.get("value").unwrap().as_str())
             .expect("Cannot determine name for master")
     }
 }
