@@ -80,7 +80,7 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                     let ufo_glyph = ufo_layer
                         .get_glyph_mut(glyph.name())
                         .expect("Can't find glyph in UFO");
-                    let converted_glyph = convert_glyphs_glyph_to_ufo_glyph(&layer);
+                    let converted_glyph = convert_glyphs_glyph_to_ufo_glyph(layer);
                     ufo_glyph.anchors = converted_glyph.anchors;
                     ufo_glyph.contours = converted_glyph.contours;
                     ufo_glyph.components = converted_glyph.components;
