@@ -93,6 +93,7 @@ pub struct GuideLine {
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct FontMaster {
     pub id: String,
+    pub italic_angle: Option<f64>,
     pub weight_value: Option<i64>,
     pub width_value: Option<i64>,
     pub custom_value: Option<i64>,
