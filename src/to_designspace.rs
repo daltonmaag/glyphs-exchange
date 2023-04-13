@@ -94,7 +94,9 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
             ufo.save(&ufo_path).expect("Cannot save UFO");
             fs::write(metainfo_path, metainfo).expect("Cannot write metainfo.plist");
 
-            run_ufonormalizer(&ufo_path);
+            run_ufonormalizer(&ufo_path)
+                .map_err(|e| format!("ufonormalizer failed on {}: {:?}", ufo_path.display(), e))
+                .unwrap();
         });
 }
 
@@ -178,14 +180,25 @@ fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphstool::Layer) -> norad::Glyph 
     ufo_glyph
 }
 
-fn run_ufonormalizer(ufo_path: &Path) {
+fn run_ufonormalizer(ufo_path: &Path) -> Result<(), std::io::Error> {
     use std::process::Command;
 
-    Command::new("ufonormalizer")
+    match Command::new("ufonormalizer")
         .arg("-m")
         .arg(ufo_path)
         .output()
-        .expect("failed to run ufonormalizer");
+    {
+        Ok(_) => (),
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                eprintln!("ufonormalizer not found, skipping normalization");
+            } else {
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 // #[cfg(test)]
