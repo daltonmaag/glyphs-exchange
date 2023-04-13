@@ -352,29 +352,9 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         };
 
         for glyph in ufo_layer.iter() {
-            let converted_glyph = glyphs.entry(glyph.name().to_string()).or_insert_with(|| {
-                let unicode = if !glyph.codepoints.is_empty() {
-                    Some(
-                        glyph
-                            .codepoints
-                            .iter()
-                            .map(|c| format!("{:04X}", c as usize))
-                            .collect::<Vec<_>>()
-                            .join(","),
-                    )
-                } else {
-                    None
-                };
-
-                glyphstool::Glyph {
-                    unicode,
-                    glyphname: glyph.name().to_string().into(),
-                    layers: Default::default(),
-                    other_stuff: Default::default(),
-                    left_kerning_group: None,
-                    right_kerning_group: None,
-                }
-            });
+            let converted_glyph = glyphs
+                .entry(glyph.name().to_string())
+                .or_insert_with(|| new_glyph_from(glyph));
 
             let (associated_master_id, layer_id) = match &layer_id {
                 LayerId::Master(id) => (None, id.clone()),
@@ -548,6 +528,29 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         other_stuff,
         disables_automatic_alignment,
         instances: Some(instances),
+    }
+}
+
+fn new_glyph_from(glyph: &norad::Glyph) -> glyphstool::Glyph {
+    let unicode = if !glyph.codepoints.is_empty() {
+        Some(
+            glyph
+                .codepoints
+                .iter()
+                .map(|c| format!("{:04X}", c as usize))
+                .collect::<Vec<_>>()
+                .join(","),
+        )
+    } else {
+        None
+    };
+    glyphstool::Glyph {
+        unicode,
+        glyphname: glyph.name().to_string().into(),
+        layers: Default::default(),
+        other_stuff: Default::default(),
+        left_kerning_group: None,
+        right_kerning_group: None,
     }
 }
 
