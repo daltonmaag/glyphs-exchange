@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     path::Path,
 };
 
@@ -86,7 +87,13 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                 }
             }
 
+            // Save the UFO, but preserve the metainfo.plist, because it's
+            // uninteresting and changing it increases git noise.
+            let metainfo_path = ufo_path.join("metainfo.plist");
+            let metainfo = fs::read(&metainfo_path).expect("Cannot read metainfo.plist");
             ufo.save(&ufo_path).expect("Cannot save UFO");
+            fs::write(metainfo_path, metainfo).expect("Cannot write metainfo.plist");
+
             run_ufonormalizer(&ufo_path);
         });
 }
