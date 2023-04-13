@@ -564,8 +564,12 @@ fn node_to_contourpoint(point: &norad::ContourPoint) -> glyphstool::Node {
             (norad::PointType::OffCurve, _) => glyphstool::NodeType::OffCurve,
             (norad::PointType::Curve, true) => glyphstool::NodeType::CurveSmooth,
             (norad::PointType::Curve, false) => glyphstool::NodeType::Curve,
-            (norad::PointType::QCurve, true) => todo!(),
-            (norad::PointType::QCurve, false) => todo!(),
+            (norad::PointType::QCurve, true) => {
+                unimplemented!("Quadratic curves are not currently supported")
+            }
+            (norad::PointType::QCurve, false) => {
+                unimplemented!("Quadratic curves are not currently supported")
+            }
         },
     }
 }
