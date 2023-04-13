@@ -8,19 +8,19 @@ use glyphstool;
 use glyphstool::{Layer, Plist};
 
 #[derive(Debug)]
-pub(crate) struct DesignspaceContext {
-    pub(crate) designspace: designspace::DesignSpaceDocument,
-    pub(crate) ufos: HashMap<String, norad::Font>,
-    pub(crate) ids: HashMap<String, String>,
+struct DesignspaceContext {
+    designspace: designspace::DesignSpaceDocument,
+    ufos: HashMap<String, norad::Font>,
+    ids: HashMap<String, String>,
 }
 
 #[derive(Debug)]
-pub(crate) enum LayerId {
+enum LayerId {
     Master(String),
     AssociatedWithMaster(String, String),
 }
 
-pub(crate) type DesignLocation = (
+type DesignLocation = (
     i64,
     Option<i64>,
     Option<i64>,
@@ -29,7 +29,7 @@ pub(crate) type DesignLocation = (
     Option<i64>,
 );
 
-pub(crate) type InstanceLocation = (
+type InstanceLocation = (
     f64,
     Option<f64>,
     Option<f64>,
@@ -39,7 +39,7 @@ pub(crate) type InstanceLocation = (
 );
 
 impl DesignspaceContext {
-    pub(crate) fn from_path(designspace_path: &Path) -> Self {
+    fn from_path(designspace_path: &Path) -> Self {
         let designspace = designspace::DesignSpaceDocument::load(designspace_path)
             .expect("Cannot load Designspace.");
 
@@ -89,7 +89,7 @@ impl DesignspaceContext {
         }
     }
 
-    pub(crate) fn id_for_source_name(&self, source: &designspace::Source) -> LayerId {
+    fn id_for_source_name(&self, source: &designspace::Source) -> LayerId {
         if source.layer.is_none() {
             LayerId::Master(self.ids[&source.name].clone())
         } else {
@@ -107,7 +107,7 @@ impl DesignspaceContext {
     }
 
     // TODO: Fix reliance on the order of dimensions in the location.
-    pub(crate) fn design_location(location: &[designspace::Dimension]) -> DesignLocation {
+    fn design_location(location: &[designspace::Dimension]) -> DesignLocation {
         let location_at = |i: usize| {
             location
                 .get(i)
@@ -123,7 +123,7 @@ impl DesignspaceContext {
         )
     }
 
-    pub(crate) fn design_location_float(location: &[designspace::Dimension]) -> InstanceLocation {
+    fn design_location_float(location: &[designspace::Dimension]) -> InstanceLocation {
         let location_at = |i: usize| location.get(i).map(|dim| dim.xvalue.unwrap_or(0.0) as f64);
         (
             location_at(0).unwrap_or(0.0),
@@ -135,7 +135,7 @@ impl DesignspaceContext {
         )
     }
 
-    pub(crate) fn axis_by_name(&self, name: &str) -> &designspace::Axis {
+    fn axis_by_name(&self, name: &str) -> &designspace::Axis {
         self.designspace
             .axes
             .iter()
@@ -144,7 +144,7 @@ impl DesignspaceContext {
     }
 
     // TODO: Fix reliance on the order of dimensions in the location and axes.
-    pub(crate) fn axis_location(&self, source: &designspace::Source) -> Plist {
+    fn axis_location(&self, source: &designspace::Source) -> Plist {
         let map_backwards = |axis: &designspace::Axis, value: f32| {
             if let Some(mapping) = &axis.map {
                 mapping
@@ -182,7 +182,7 @@ impl DesignspaceContext {
             .into()
     }
 
-    pub(crate) fn global_axes(&self) -> Plist {
+    fn global_axes(&self) -> Plist {
         self.designspace
             .axes
             .iter()
@@ -201,7 +201,7 @@ impl DesignspaceContext {
     }
 }
 
-pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
+pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
     let context = DesignspaceContext::from_path(designspace_path);
 
     let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
