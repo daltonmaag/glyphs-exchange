@@ -202,7 +202,7 @@ impl DesignspaceContext {
 }
 
 pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
-    let context = DesignspaceContext::from_path(&designspace_path);
+    let context = DesignspaceContext::from_path(designspace_path);
 
     let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
     let mut font_master: Vec<glyphstool::FontMaster> = Vec::new();
@@ -360,8 +360,7 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                             .iter()
                             .map(|c| format!("{:04X}", c as usize))
                             .collect::<Vec<_>>()
-                            .join(",")
-                            .into(),
+                            .join(","),
                     )
                 } else {
                     None
@@ -383,74 +382,52 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                     (Some(parent_id.clone()), child_id.clone())
                 }
             };
-            let width = glyph.width;
-            let mut paths: Vec<glyphstool::Path> = Vec::new();
-            let mut components: Vec<glyphstool::Component> = Vec::new();
-            let mut anchors: Vec<glyphstool::Anchor> = Vec::new();
-            let guide_lines = None;
-            let other_stuff: HashMap<String, Plist> = HashMap::new();
 
-            for contour in glyph.contours.iter() {
-                let mut nodes: Vec<glyphstool::Node> = contour
-                    .points
-                    .iter()
-                    .map(|point| glyphstool::Node {
-                        pt: kurbo::Point::new(point.x, point.y),
-                        node_type: match (&point.typ, point.smooth) {
-                            (norad::PointType::Move, _) => glyphstool::NodeType::Line,
-                            (norad::PointType::Line, true) => glyphstool::NodeType::LineSmooth,
-                            (norad::PointType::Line, false) => glyphstool::NodeType::Line,
-                            (norad::PointType::OffCurve, _) => glyphstool::NodeType::OffCurve,
-                            (norad::PointType::Curve, true) => glyphstool::NodeType::CurveSmooth,
-                            (norad::PointType::Curve, false) => glyphstool::NodeType::Curve,
-                            (norad::PointType::QCurve, true) => todo!(),
-                            (norad::PointType::QCurve, false) => todo!(),
-                        },
-                    })
-                    .collect();
-                if contour.is_closed() {
-                    nodes.rotate_left(1);
-                }
+            let paths: Vec<glyphstool::Path> = glyph
+                .contours
+                .iter()
+                .map(|contour| {
+                    let mut nodes: Vec<glyphstool::Node> =
+                        contour.points.iter().map(node_to_contourpoint).collect();
+                    if contour.is_closed() {
+                        nodes.rotate_left(1);
+                    }
+                    glyphstool::Path {
+                        closed: contour.is_closed(),
+                        nodes,
+                    }
+                })
+                .collect();
 
-                paths.push(glyphstool::Path {
-                    closed: contour.is_closed(),
-                    nodes,
-                });
-            }
-
-            for component in glyph.components.iter() {
-                components.push(glyphstool::Component {
+            let components: Vec<glyphstool::Component> = glyph
+                .components
+                .iter()
+                .map(|component| glyphstool::Component {
                     name: component.base.to_string(),
                     transform: if component.transform == Default::default() {
                         None
                     } else {
-                        Some(kurbo::Affine::new([
-                            component.transform.x_scale,
-                            component.transform.xy_scale,
-                            component.transform.yx_scale,
-                            component.transform.y_scale,
-                            component.transform.x_offset,
-                            component.transform.y_offset,
-                        ]))
+                        Some(component.transform.into())
                     },
                     other_stuff: Default::default(),
                 })
-            }
+                .collect();
 
-            for anchor in glyph.anchors.iter() {
-                if let Some(name) = &anchor.name {
-                    anchors.push(glyphstool::Anchor {
-                        name: name.to_string(),
-                        position: kurbo::Point::new(anchor.x, anchor.y),
-                    });
-                }
-            }
+            let anchors: Vec<glyphstool::Anchor> = glyph
+                .anchors
+                .iter()
+                .filter(|anchor| anchor.name.is_some())
+                .map(|anchor| glyphstool::Anchor {
+                    name: anchor.name.as_ref().unwrap().as_str().to_string(),
+                    position: kurbo::Point::new(anchor.x, anchor.y),
+                })
+                .collect();
 
             converted_glyph.layers.push(Layer {
                 name: source.layer.clone(),
                 associated_master_id,
                 layer_id,
-                width,
+                width: glyph.width,
                 paths: if !paths.is_empty() { Some(paths) } else { None },
                 components: if !components.is_empty() {
                     Some(components)
@@ -462,8 +439,8 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                 } else {
                     None
                 },
-                guide_lines,
-                other_stuff,
+                guide_lines: None,
+                other_stuff: Default::default(),
             });
         }
     }
@@ -571,5 +548,21 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         other_stuff,
         disables_automatic_alignment,
         instances: Some(instances),
+    }
+}
+
+fn node_to_contourpoint(point: &norad::ContourPoint) -> glyphstool::Node {
+    glyphstool::Node {
+        pt: kurbo::Point::new(point.x, point.y),
+        node_type: match (&point.typ, point.smooth) {
+            (norad::PointType::Move, _) => glyphstool::NodeType::Line,
+            (norad::PointType::Line, true) => glyphstool::NodeType::LineSmooth,
+            (norad::PointType::Line, false) => glyphstool::NodeType::Line,
+            (norad::PointType::OffCurve, _) => glyphstool::NodeType::OffCurve,
+            (norad::PointType::Curve, true) => glyphstool::NodeType::CurveSmooth,
+            (norad::PointType::Curve, false) => glyphstool::NodeType::Curve,
+            (norad::PointType::QCurve, true) => todo!(),
+            (norad::PointType::QCurve, false) => todo!(),
+        },
     }
 }
