@@ -271,6 +271,7 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
     let mut version_major: Option<i64> = None;
     let mut version_minor: Option<i64> = None;
 
+    let mut disables_automatic_alignment = None;
     let mut glyph_order: Option<Vec<String>> = None;
 
     for source in context.designspace.sources.iter() {
@@ -294,6 +295,15 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
                 (&version_minor, &font.font_info.version_minor)
             {
                 version_minor.replace(*source_version_minor as i64);
+            }
+
+            if let (None, Some(source_disables_automatic_alignment)) = (
+                disables_automatic_alignment,
+                font.lib
+                    .get("com.schriftgestaltung.customParameter.GSFont.disablesAutomaticAlignment"),
+            ) {
+                disables_automatic_alignment
+                    .replace(source_disables_automatic_alignment.as_boolean().unwrap());
             }
 
             if let (None, Some(Some(source_glyph_order))) = (
@@ -606,11 +616,15 @@ fn convert_ufos_to_glyphs(context: &DesignspaceContext) -> glyphstool::Font {
         glyphs.into_values().collect::<Vec<_>>()
     };
 
+    if disables_automatic_alignment.is_none() {
+        disables_automatic_alignment = Some(true);
+    }
+
     glyphstool::Font {
         glyphs,
         font_master,
         other_stuff,
-        disables_automatic_alignment: Some(true),
+        disables_automatic_alignment,
         instances: Some(instances),
     }
 }
