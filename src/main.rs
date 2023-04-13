@@ -1,7 +1,6 @@
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use glyphstool::ToPlist;
 
 pub mod to_designspace;
 pub mod to_glyphs;
@@ -45,10 +44,11 @@ fn main() {
         } => {
             let glyphs_font = to_glyphs::command_to_glyphs(&designspace_path);
 
-            let plist = glyphs_font.to_plist();
             let glyphs_path =
                 glyphs_path.unwrap_or_else(|| designspace_path.with_extension("glyphs"));
-            fs::write(glyphs_path, plist.to_string()).unwrap();
+            glyphs_font
+                .save(&glyphs_path)
+                .expect("Failed to save Glyphs file!");
         }
         Commands::Glyphs2ufo {
             glyphs_path,

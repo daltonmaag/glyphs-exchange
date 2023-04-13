@@ -9,14 +9,14 @@ use rayon::prelude::*;
 
 #[derive(Debug)]
 struct Glyphs2DesignspaceContext {
-    font: glyphstool::Font,
+    font: glyphs_plist::Font,
     /// Mapping of relative filename to layer IDs and sparse layer names.
     ufo_mapping: HashMap<String, HashSet<String>>,
 }
 
 impl Glyphs2DesignspaceContext {
     fn from_paths(glyphs_path: &Path, designspace_path: &Path) -> Self {
-        let font = glyphstool::Font::load(glyphs_path).expect("Cannot load Glyphs file");
+        let font = glyphs_plist::Font::load(glyphs_path).expect("Cannot load Glyphs file");
         let designspace = designspace::DesignSpaceDocument::load(designspace_path)
             .expect("Cannot load Designspace");
 
@@ -100,7 +100,7 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
         });
 }
 
-fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphstool::Layer) -> norad::Glyph {
+fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphs_plist::Layer) -> norad::Glyph {
     let mut ufo_glyph = Glyph::new("converted_glyph");
 
     // TODO: Figure out height: only interesting if there is a vertical origin?
@@ -126,11 +126,11 @@ fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphstool::Layer) -> norad::Glyph 
                 .iter()
                 .map(|node| {
                     let (typ, smooth) = match &node.node_type {
-                        glyphstool::NodeType::Curve => (norad::PointType::Curve, false),
-                        glyphstool::NodeType::CurveSmooth => (norad::PointType::Curve, true),
-                        glyphstool::NodeType::Line => (norad::PointType::Line, false),
-                        glyphstool::NodeType::LineSmooth => (norad::PointType::Line, true),
-                        glyphstool::NodeType::OffCurve => (norad::PointType::OffCurve, false),
+                        glyphs_plist::NodeType::Curve => (norad::PointType::Curve, false),
+                        glyphs_plist::NodeType::CurveSmooth => (norad::PointType::Curve, true),
+                        glyphs_plist::NodeType::Line => (norad::PointType::Line, false),
+                        glyphs_plist::NodeType::LineSmooth => (norad::PointType::Line, true),
+                        glyphs_plist::NodeType::OffCurve => (norad::PointType::OffCurve, false),
                     };
                     norad::ContourPoint::new(node.pt.x, node.pt.y, typ, smooth, None, None, None)
                 })

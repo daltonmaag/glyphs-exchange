@@ -5,6 +5,7 @@
 //! where it gets serialized to more Rust-native structures, proc macros, etc.
 
 use std::collections::HashMap;
+use std::fs;
 
 use kurbo::{Affine, Point};
 
@@ -125,6 +126,11 @@ impl Font {
         let contents = std::fs::read_to_string(path).map_err(|e| format!("{:?}", e))?;
         let plist = Plist::parse(&contents).map_err(|e| format!("{:?}", e))?;
         Ok(FromPlist::from_plist(plist))
+    }
+
+    pub fn save(self, path: &std::path::Path) -> Result<(), String> {
+        let plist = self.to_plist();
+        fs::write(path, plist.to_string()).map_err(|e| format!("{:?}", e))
     }
 
     pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {

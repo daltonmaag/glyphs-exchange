@@ -4,8 +4,8 @@ use std::path::Path;
 use maplit::hashmap;
 use norad::designspace;
 
-use glyphstool;
-use glyphstool::{Layer, Plist};
+use glyphs_plist;
+use glyphs_plist::{Layer, Plist};
 
 #[derive(Debug)]
 struct DesignspaceContext {
@@ -201,11 +201,11 @@ impl DesignspaceContext {
     }
 }
 
-pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
+pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     let context = DesignspaceContext::from_path(designspace_path);
 
-    let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
-    let mut font_master: Vec<glyphstool::FontMaster> = Vec::new();
+    let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
+    let mut font_master: Vec<glyphs_plist::FontMaster> = Vec::new();
     let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
     let mut family_name: Option<String> = None;
@@ -330,7 +330,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
             );
             other_stuff.insert("customParameters".into(), custom_parameters.into());
 
-            font_master.push(glyphstool::FontMaster {
+            font_master.push(glyphs_plist::FontMaster {
                 id: id.clone(),
                 italic_angle,
                 weight_value: Some(weight_value),
@@ -363,26 +363,26 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                 }
             };
 
-            let paths: Vec<glyphstool::Path> = glyph
+            let paths: Vec<glyphs_plist::Path> = glyph
                 .contours
                 .iter()
                 .map(|contour| {
-                    let mut nodes: Vec<glyphstool::Node> =
+                    let mut nodes: Vec<glyphs_plist::Node> =
                         contour.points.iter().map(node_to_contourpoint).collect();
                     if contour.is_closed() {
                         nodes.rotate_left(1);
                     }
-                    glyphstool::Path {
+                    glyphs_plist::Path {
                         closed: contour.is_closed(),
                         nodes,
                     }
                 })
                 .collect();
 
-            let components: Vec<glyphstool::Component> = glyph
+            let components: Vec<glyphs_plist::Component> = glyph
                 .components
                 .iter()
-                .map(|component| glyphstool::Component {
+                .map(|component| glyphs_plist::Component {
                     name: component.base.to_string(),
                     transform: if component.transform == Default::default() {
                         None
@@ -393,11 +393,11 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                 })
                 .collect();
 
-            let anchors: Vec<glyphstool::Anchor> = glyph
+            let anchors: Vec<glyphs_plist::Anchor> = glyph
                 .anchors
                 .iter()
                 .filter(|anchor| anchor.name.is_some())
-                .map(|anchor| glyphstool::Anchor {
+                .map(|anchor| glyphs_plist::Anchor {
                     name: anchor.name.as_ref().unwrap().as_str().to_string(),
                     position: kurbo::Point::new(anchor.x, anchor.y),
                 })
@@ -425,7 +425,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         }
     }
 
-    let mut instances: Vec<glyphstool::Instance> = Vec::new();
+    let mut instances: Vec<glyphs_plist::Instance> = Vec::new();
     for instance in context.designspace.instances.iter() {
         let name = instance.stylename.clone().unwrap_or_default();
         let (
@@ -452,7 +452,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         let link_style = instance.stylemapfamilyname.clone();
         let other_stuff: HashMap<String, Plist> = HashMap::new();
 
-        instances.push(glyphstool::Instance {
+        instances.push(glyphs_plist::Instance {
             name,
             interpolation_weight: Some(interpolation_weight),
             interpolation_width,
@@ -522,7 +522,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         disables_automatic_alignment = Some(true);
     }
 
-    glyphstool::Font {
+    glyphs_plist::Font {
         glyphs,
         font_master,
         other_stuff,
@@ -531,7 +531,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
     }
 }
 
-fn new_glyph_from(glyph: &norad::Glyph) -> glyphstool::Glyph {
+fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
     let unicode = if !glyph.codepoints.is_empty() {
         Some(
             glyph
@@ -544,7 +544,7 @@ fn new_glyph_from(glyph: &norad::Glyph) -> glyphstool::Glyph {
     } else {
         None
     };
-    glyphstool::Glyph {
+    glyphs_plist::Glyph {
         unicode,
         glyphname: glyph.name().to_string().into(),
         layers: Default::default(),
@@ -554,16 +554,16 @@ fn new_glyph_from(glyph: &norad::Glyph) -> glyphstool::Glyph {
     }
 }
 
-fn node_to_contourpoint(point: &norad::ContourPoint) -> glyphstool::Node {
-    glyphstool::Node {
+fn node_to_contourpoint(point: &norad::ContourPoint) -> glyphs_plist::Node {
+    glyphs_plist::Node {
         pt: kurbo::Point::new(point.x, point.y),
         node_type: match (&point.typ, point.smooth) {
-            (norad::PointType::Move, _) => glyphstool::NodeType::Line,
-            (norad::PointType::Line, true) => glyphstool::NodeType::LineSmooth,
-            (norad::PointType::Line, false) => glyphstool::NodeType::Line,
-            (norad::PointType::OffCurve, _) => glyphstool::NodeType::OffCurve,
-            (norad::PointType::Curve, true) => glyphstool::NodeType::CurveSmooth,
-            (norad::PointType::Curve, false) => glyphstool::NodeType::Curve,
+            (norad::PointType::Move, _) => glyphs_plist::NodeType::Line,
+            (norad::PointType::Line, true) => glyphs_plist::NodeType::LineSmooth,
+            (norad::PointType::Line, false) => glyphs_plist::NodeType::Line,
+            (norad::PointType::OffCurve, _) => glyphs_plist::NodeType::OffCurve,
+            (norad::PointType::Curve, true) => glyphs_plist::NodeType::CurveSmooth,
+            (norad::PointType::Curve, false) => glyphs_plist::NodeType::Curve,
             (norad::PointType::QCurve, true) => {
                 unimplemented!("Quadratic curves are not currently supported")
             }
