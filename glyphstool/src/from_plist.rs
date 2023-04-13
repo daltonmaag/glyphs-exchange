@@ -12,6 +12,12 @@ pub trait FromPlistOpt {
     fn from_plist(plist: Option<Plist>) -> Self;
 }
 
+impl FromPlist for Plist {
+    fn from_plist(plist: Plist) -> Self {
+        plist
+    }
+}
+
 impl FromPlist for String {
     fn from_plist(plist: Plist) -> Self {
         plist.into_string()

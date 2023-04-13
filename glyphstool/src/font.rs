@@ -17,6 +17,7 @@ pub struct Font {
     pub glyphs: Vec<Glyph>,
     pub font_master: Vec<FontMaster>,
     pub instances: Option<Vec<Instance>>,
+    pub disables_automatic_alignment: Option<bool>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }
@@ -24,9 +25,9 @@ pub struct Font {
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Glyph {
     pub layers: Vec<Layer>,
-    // TODO: Find a way to deserialize this separately; the name `infinity` will
-    //       be interpreted as a number and will crash parsing.
-    // pub glyphname: String,
+    /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
+    /// quotes around the name "infinity", making it parse as a float instead.
+    pub glyphname: Plist,
     pub left_kerning_group: Option<String>,
     pub right_kerning_group: Option<String>,
     #[rest]
@@ -139,7 +140,7 @@ impl Glyph {
     }
 
     pub fn name(&self) -> &str {
-        match self.other_stuff.get("glyphname").unwrap() {
+        match &self.glyphname {
             Plist::String(s) => s.as_str(),
             Plist::Float(f) => {
                 if f.is_infinite() {

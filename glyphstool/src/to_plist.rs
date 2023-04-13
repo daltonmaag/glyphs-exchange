@@ -10,6 +10,12 @@ pub trait ToPlistOpt {
     fn to_plist(self) -> Option<Plist>;
 }
 
+impl ToPlist for Plist {
+    fn to_plist(self) -> Plist {
+        self
+    }
+}
+
 impl ToPlist for String {
     fn to_plist(self) -> Plist {
         self.into()
