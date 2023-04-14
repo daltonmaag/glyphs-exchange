@@ -303,90 +303,20 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     let context = DesignspaceContext::from_path(designspace_path);
 
     let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
-    let mut font_master: Vec<glyphs_plist::FontMaster> = Vec::new();
-    let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
     let font_properties = FontProperties::from_context(&context);
+
+    let font_master: Vec<glyphs_plist::FontMaster> = context
+        .designspace
+        .sources
+        .iter()
+        .filter(|source| source.layer.is_none())
+        .map(|source| master_from_source(&context, source))
+        .collect();
 
     for source in context.designspace.sources.iter() {
         let layer_id = context.id_for_source_name(source);
         let font = &context.ufos[&source.filename];
-
-        // TODO: Do a first pass over sources and generate FontMasters first,
-        // then do a second pass dealing with glyphs.
-        if source.layer.is_none() {
-            let LayerId::Master(id) = &layer_id else {
-                panic!("Master does not seem to be a master?!")
-            };
-            let (
-                weight_value,
-                width_value,
-                custom_value,
-                custom_value1,
-                custom_value2,
-                custom_value3,
-            ) = DesignspaceContext::design_location(&source.location);
-
-            let ascender = font
-                .font_info
-                .ascender
-                .map(|v| v.round() as i64)
-                .unwrap_or(800);
-            let cap_height = font
-                .font_info
-                .cap_height
-                .map(|v| v.round() as i64)
-                .unwrap_or(700);
-            let descender = font
-                .font_info
-                .descender
-                .map(|v| v.round() as i64)
-                .unwrap_or(-200);
-            let x_height = font
-                .font_info
-                .x_height
-                .map(|v| v.round() as i64)
-                .unwrap_or(500);
-            let italic_angle = font.font_info.italic_angle.map(|v| -v);
-
-            // The "Master Name" custom parameter is the only place where it
-            // stays safe, because Glyphs leaves out fields in FontMaster it
-            // thinks it can regenerate. GlyphsLib uses the style name rather
-            // than source name for it.
-            let source_name = source
-                .stylename
-                .as_ref()
-                .expect("Source must have a stylename");
-
-            let other_stuff = hashmap! {
-                "customParameters".into() => vec![
-                    hashmap! {
-                        "name".into() => String::from("Axis Location").into(),
-                        "value".into() => context.axis_location(source),
-                    }.into(),
-                    hashmap! {
-                        "name".into() => String::from("Master Name").into(),
-                        "value".into() => source_name.to_string().into(),
-                    }.into(),
-                ].into(),
-            };
-
-            font_master.push(glyphs_plist::FontMaster {
-                ascender: Some(ascender),
-                cap_height: Some(cap_height),
-                custom_value,
-                custom_value1,
-                custom_value2,
-                custom_value3,
-                descender: Some(descender),
-                id: id.clone(),
-                italic_angle,
-                other_stuff,
-                weight_value: Some(weight_value),
-                width_value,
-                x_height: Some(x_height),
-            });
-        }
 
         let ufo_layer = if source.layer.is_some() {
             font.layers
@@ -491,16 +421,16 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         })
     }
 
-    other_stuff.insert(".appVersion".into(), String::from("1361").into());
+    let mut other_stuff: HashMap<String, Plist> = hashmap! {
+        ".appVersion".into() => String::from("1361").into(),
+    };
 
-    let mut custom_parameters: Vec<Plist> = Vec::new();
-    custom_parameters.push(
-        hashmap! {
-            "name".into() => String::from("Axes").into(),
-            "value".into() => context.global_axes(),
-        }
-        .into(),
-    );
+    let mut custom_parameters: Vec<Plist> = vec![hashmap! {
+        "name".into() => String::from("Axes").into(),
+        "value".into() => context.global_axes(),
+    }
+    .into()];
+
     if let Some(glyph_order) = &font_properties.glyph_order {
         let glyph_order_plist: Vec<Plist> =
             glyph_order.iter().map(|n| n.to_string().into()).collect();
@@ -545,6 +475,77 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         units_per_em: font_properties.units_per_em,
         version_major: font_properties.version_major,
         version_minor: font_properties.version_minor,
+    }
+}
+
+fn master_from_source(
+    context: &DesignspaceContext,
+    source: &designspace::Source,
+) -> glyphs_plist::FontMaster {
+    let layer_id = context.id_for_source_name(source);
+    let font = &context.ufos[&source.filename];
+
+    let LayerId::Master(id) = &layer_id else {
+        panic!("Master does not seem to be a master?!")
+    };
+
+    let (weight_value, width_value, custom_value, custom_value1, custom_value2, custom_value3) =
+        DesignspaceContext::design_location(&source.location);
+
+    let ascender = font
+        .font_info
+        .ascender
+        .map(|v| v.round() as i64)
+        .unwrap_or(800);
+    let cap_height = font
+        .font_info
+        .cap_height
+        .map(|v| v.round() as i64)
+        .unwrap_or(700);
+    let descender = font
+        .font_info
+        .descender
+        .map(|v| v.round() as i64)
+        .unwrap_or(-200);
+    let x_height = font
+        .font_info
+        .x_height
+        .map(|v| v.round() as i64)
+        .unwrap_or(500);
+    let italic_angle = font.font_info.italic_angle.map(|v| -v);
+
+    let source_name = source
+        .stylename
+        .as_ref()
+        .expect("Source must have a stylename");
+
+    let other_stuff = hashmap! {
+        "customParameters".into() => vec![
+            hashmap! {
+                "name".into() => String::from("Axis Location").into(),
+                "value".into() => context.axis_location(source),
+            }.into(),
+            hashmap! {
+                "name".into() => String::from("Master Name").into(),
+                "value".into() => source_name.to_string().into(),
+            }.into(),
+        ].into(),
+    };
+
+    glyphs_plist::FontMaster {
+        ascender: Some(ascender),
+        cap_height: Some(cap_height),
+        custom_value,
+        custom_value1,
+        custom_value2,
+        custom_value3,
+        descender: Some(descender),
+        id: id.clone(),
+        italic_angle,
+        other_stuff,
+        weight_value: Some(weight_value),
+        width_value,
+        x_height: Some(x_height),
     }
 }
 
