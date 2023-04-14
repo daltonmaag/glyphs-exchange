@@ -68,19 +68,22 @@ impl DesignspaceContext {
             panic!("Designspace must have at most six axes.");
         }
 
-        let unique_filenames: HashSet<String> = HashSet::from_iter(
-            designspace
-                .sources
-                .iter()
-                .map(|source| source.filename.to_string()),
-        );
+        let unique_filenames: HashSet<String> = designspace
+            .sources
+            .iter()
+            .map(|source| source.filename.to_string())
+            .collect();
         let designspace_dir = designspace_path.parent().unwrap();
-        let ufos = HashMap::from_iter(unique_filenames.into_iter().map(|filename| {
-            (
-                filename.clone(),
-                norad::Font::load(designspace_dir.join(filename)).expect("Could not load UFO"),
-            )
-        }));
+        let ufos: HashMap<String, norad::Font> = unique_filenames
+            .into_iter()
+            .map(|filename| {
+                (
+                    filename.clone(),
+                    norad::Font::load(designspace_dir.join(filename)).expect("Could not load UFO"),
+                )
+            })
+            .collect();
+
         let ids = designspace
             .sources
             .iter()
