@@ -1,13 +1,15 @@
 [package]
-name = "glyphs_plist"
+name = "glyphs-exchange"
 version = "0.1.0"
-license = "MIT/Apache-2.0"
-authors = ["Raph Levien <raph.levien@gmail.com>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glyphs_plist_derive = { path = "../glyphs_plist_derive" }
+clap = { version = "4.1", features = ["derive"] }
+glyphs_plist = { path = "../glyphs_plist" }
 kurbo = { workspace = true }
+maplit = "1.0.2"
 norad = { workspace = true }
+rayon = "1.7.0"
+uuid = { version = "1.3.0", features = ["v4", "fast-rng"] }
