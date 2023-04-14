@@ -302,10 +302,7 @@ impl FontProperties {
 pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     let context = DesignspaceContext::from_path(designspace_path);
 
-    let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
-
     let font_properties = FontProperties::from_context(&context);
-
     let font_master: Vec<glyphs_plist::FontMaster> = context
         .designspace
         .sources
@@ -313,7 +310,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .filter(|source| source.layer.is_none())
         .map(|source| master_from(&context, source))
         .collect();
-
     let instances: Vec<glyphs_plist::Instance> = context
         .designspace
         .instances
@@ -321,6 +317,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .map(instance_from)
         .collect();
 
+    let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
     for source in context.designspace.sources.iter() {
         let layer_id = context.id_for_source_name(source);
         let font = &context.ufos[&source.filename];
@@ -338,51 +335,8 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
                 .entry(glyph.name().to_string())
                 .or_insert_with(|| new_glyph_from(glyph));
 
-            let (associated_master_id, layer_id) = match &layer_id {
-                LayerId::Master(id) => (None, id.clone()),
-                LayerId::AssociatedWithMaster(parent_id, child_id) => {
-                    (Some(parent_id.clone()), child_id.clone())
-                }
-            };
-
-            let paths: Vec<glyphs_plist::Path> = glyph
-                .contours
-                .iter()
-                .map(|contour| contour.into())
-                .collect();
-
-            let components: Vec<glyphs_plist::Component> = glyph
-                .components
-                .iter()
-                .map(|component| component.into())
-                .collect();
-
-            let anchors: Vec<glyphs_plist::Anchor> = glyph
-                .anchors
-                .iter()
-                .filter(|anchor| anchor.name.is_some())
-                .map(|anchor| anchor.into())
-                .collect();
-
-            converted_glyph.layers.push(Layer {
-                name: source.layer.clone(),
-                associated_master_id,
-                layer_id,
-                width: glyph.width,
-                paths: if !paths.is_empty() { Some(paths) } else { None },
-                components: if !components.is_empty() {
-                    Some(components)
-                } else {
-                    None
-                },
-                anchors: if !anchors.is_empty() {
-                    Some(anchors)
-                } else {
-                    None
-                },
-                guide_lines: None,
-                other_stuff: Default::default(),
-            });
+            let layer = layer_from(&layer_id, glyph, source.layer.as_ref().map(|n| n.as_str()));
+            converted_glyph.layers.push(layer);
         }
     }
 
@@ -553,6 +507,55 @@ fn instance_from(instance: &designspace::Instance) -> glyphs_plist::Instance {
         link_style,
         other_stuff,
     }
+}
+
+fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph, layer_name: Option<&str>) -> Layer {
+    let (associated_master_id, layer_id) = match layer_id {
+        LayerId::Master(id) => (None, id.clone()),
+        LayerId::AssociatedWithMaster(parent_id, child_id) => {
+            (Some(parent_id.clone()), child_id.clone())
+        }
+    };
+
+    let paths: Vec<glyphs_plist::Path> = glyph
+        .contours
+        .iter()
+        .map(|contour| contour.into())
+        .collect();
+
+    let components: Vec<glyphs_plist::Component> = glyph
+        .components
+        .iter()
+        .map(|component| component.into())
+        .collect();
+
+    let anchors: Vec<glyphs_plist::Anchor> = glyph
+        .anchors
+        .iter()
+        .filter(|anchor| anchor.name.is_some())
+        .map(|anchor| anchor.into())
+        .collect();
+
+    let layer = Layer {
+        name: layer_name.as_ref().map(|n| n.to_string()),
+        associated_master_id,
+        layer_id,
+        width: glyph.width,
+        paths: if !paths.is_empty() { Some(paths) } else { None },
+        components: if !components.is_empty() {
+            Some(components)
+        } else {
+            None
+        },
+        anchors: if !anchors.is_empty() {
+            Some(anchors)
+        } else {
+            None
+        },
+        guide_lines: None,
+        other_stuff: Default::default(),
+    };
+    layer
 }
 
 fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
