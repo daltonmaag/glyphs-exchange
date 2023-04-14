@@ -208,11 +208,11 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     let mut font_master: Vec<glyphs_plist::FontMaster> = Vec::new();
     let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
+    // TODO: Determine these from the default source.
     let mut family_name: Option<String> = None;
     let mut units_per_em: Option<i64> = None;
     let mut version_major: Option<i64> = None;
     let mut version_minor: Option<i64> = None;
-
     let mut disables_automatic_alignment = None;
     let mut glyph_order: Option<Vec<String>> = None;
 
@@ -220,6 +220,8 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         let layer_id = context.id_for_source_name(source);
         let font = &context.ufos[&source.filename];
 
+        // TODO: Do a first pass over sources and generate FontMasters first,
+        // then do a second pass dealing with glyphs.
         if source.layer.is_none() {
             if let (None, Some(source_family_name)) = (&family_name, &font.font_info.family_name) {
                 family_name.replace(source_family_name.clone());
@@ -495,15 +497,15 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     }
 
     glyphs_plist::Font {
-        glyphs,
-        font_master,
-        other_stuff,
         disables_automatic_alignment,
-        instances: Some(instances),
         family_name: family_name.unwrap_or(String::from("New Font")),
+        font_master,
+        glyphs,
+        instances: Some(instances),
+        other_stuff,
+        units_per_em: units_per_em.unwrap_or(1000),
         version_major: version_major.unwrap_or(1),
         version_minor: version_minor.unwrap_or(0),
-        units_per_em: units_per_em.unwrap_or(1000),
     }
 }
 
