@@ -5,6 +5,7 @@
 //! where it gets serialized to more Rust-native structures, proc macros, etc.
 
 use std::collections::HashMap;
+use std::fs;
 
 use kurbo::{Affine, Point};
 
@@ -14,6 +15,10 @@ use crate::to_plist::ToPlist;
 
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct Font {
+    pub family_name: String,
+    pub version_major: i64,
+    pub version_minor: i64,
+    pub units_per_em: i64,
     pub glyphs: Vec<Glyph>,
     pub font_master: Vec<FontMaster>,
     pub instances: Option<Vec<Instance>>,
@@ -24,11 +29,11 @@ pub struct Font {
 
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Glyph {
-    pub unicode: Option<String>,
+    // The Unicode values(s) for the glyph.
+    pub unicode: Option<norad::Codepoints>,
     pub layers: Vec<Layer>,
-    /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
-    /// quotes around the name "infinity", making it parse as a float instead.
-    pub glyphname: Plist,
+    /// The name of the glyph.
+    pub glyphname: norad::Name,
     pub left_kerning_group: Option<String>,
     pub right_kerning_group: Option<String>,
     #[rest]
@@ -121,18 +126,23 @@ pub struct Instance {
 }
 
 impl Font {
-    pub fn load(path: &std::path::Path) -> Result<Font, String> {
+    pub fn load(path: &dyn AsRef<std::path::Path>) -> Result<Font, String> {
         let contents = std::fs::read_to_string(path).map_err(|e| format!("{:?}", e))?;
         let plist = Plist::parse(&contents).map_err(|e| format!("{:?}", e))?;
         Ok(FromPlist::from_plist(plist))
     }
 
+    pub fn save(self, path: &std::path::Path) -> Result<(), String> {
+        let plist = self.to_plist();
+        fs::write(path, plist.to_string()).map_err(|e| format!("{:?}", e))
+    }
+
     pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
-        self.glyphs.iter().find(|g| g.name() == glyphname)
+        self.glyphs.iter().find(|g| g.glyphname == glyphname)
     }
 
     pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
-        self.glyphs.iter_mut().find(|g| g.name() == glyphname)
+        self.glyphs.iter_mut().find(|g| g.glyphname == glyphname)
     }
 }
 
@@ -140,19 +150,58 @@ impl Glyph {
     pub fn get_layer(&self, layer_id: &str) -> Option<&Layer> {
         self.layers.iter().find(|l| l.layer_id == layer_id)
     }
+}
 
-    pub fn name(&self) -> &str {
-        match &self.glyphname {
-            Plist::String(s) => s.as_str(),
-            Plist::Float(f) => {
-                if f.is_infinite() {
-                    "infinity"
-                } else {
-                    panic!("Glyph name is misparsed as float, but isn't infinity?")
-                }
-            }
-            _ => panic!("Cannot parse glyphname"),
+impl FromPlist for norad::Name {
+    fn from_plist(plist: Plist) -> Self {
+        match plist {
+            Plist::String(s) => Self::new(s.as_str())
+                .unwrap_or_else(|e| panic!("Cannot parse glyphname '{}': {:?}", s, e)),
+            // Due to Glyphs.app quirks removing quotes around the name "infinity",
+            // it is parsed as a float instead.
+            Plist::Float(f) if f.is_infinite() => Self::new("infinity").unwrap(),
+            _ => panic!("Cannot parse glyphname '{:?}'", plist),
         }
+    }
+}
+
+impl ToPlist for norad::Name {
+    fn to_plist(self) -> Plist {
+        self.to_string().into()
+    }
+}
+
+impl FromPlist for norad::Codepoints {
+    fn from_plist(plist: Plist) -> Self {
+        let parse_str_as_char = |s: &str| -> char {
+            let cp = u32::from_str_radix(s, 16).unwrap();
+            char::try_from(cp).unwrap()
+        };
+
+        match plist {
+            Plist::String(s) => norad::Codepoints::new(
+                s.split(',')
+                    .filter(|s| !s.trim().is_empty())
+                    .map(|cp| parse_str_as_char(cp)),
+            ),
+            Plist::Integer(n) => {
+                let s = format!("{n}");
+                let cp = u32::from_str_radix(&s, 16).unwrap();
+                let cp = char::try_from(cp).unwrap();
+                norad::Codepoints::new([cp])
+            }
+            _ => panic!("Cannot parse codepoints: {:?}", plist),
+        }
+    }
+}
+
+impl ToPlist for norad::Codepoints {
+    fn to_plist(self) -> Plist {
+        self.iter()
+            .map(|c| format!("{:04X}", c as usize))
+            .collect::<Vec<_>>()
+            .join(",")
+            .into()
     }
 }
 
@@ -270,18 +319,31 @@ impl FontMaster {
     pub fn name(&self) -> &str {
         self.other_stuff
             .get("customParameters")
-            .and_then(|cps| {
-                Some(
-                    cps.as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|cp| cp.as_dict().unwrap()),
-                )
+            .map(|cps| {
+                cps.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|cp| cp.as_dict().unwrap())
             })
             .and_then(|mut cps| {
                 cps.find(|cp| cp.get("name").unwrap().as_str().unwrap() == "Master Name")
             })
             .and_then(|cp| cp.get("value").unwrap().as_str())
             .expect("Cannot determine name for master")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_empty_font_glyphs2() {
+        Font::load(&"../testdata/NewFont.glyphs").unwrap();
+    }
+
+    #[test]
+    fn parse_empty_font_glyphs3() {
+        Font::load(&"../testdata/NewFontG3.glyphs").unwrap();
     }
 }

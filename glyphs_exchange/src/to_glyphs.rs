@@ -4,23 +4,23 @@ use std::path::Path;
 use maplit::hashmap;
 use norad::designspace;
 
-use glyphstool;
-use glyphstool::{Layer, Plist};
+use glyphs_plist;
+use glyphs_plist::{Layer, Plist};
 
 #[derive(Debug)]
-pub(crate) struct DesignspaceContext {
-    pub(crate) designspace: designspace::DesignSpaceDocument,
-    pub(crate) ufos: HashMap<String, norad::Font>,
-    pub(crate) ids: HashMap<String, String>,
+struct DesignspaceContext {
+    designspace: designspace::DesignSpaceDocument,
+    ufos: HashMap<String, norad::Font>,
+    ids: HashMap<String, String>,
 }
 
 #[derive(Debug)]
-pub(crate) enum LayerId {
+enum LayerId {
     Master(String),
     AssociatedWithMaster(String, String),
 }
 
-pub(crate) type DesignLocation = (
+type DesignLocation = (
     i64,
     Option<i64>,
     Option<i64>,
@@ -29,7 +29,7 @@ pub(crate) type DesignLocation = (
     Option<i64>,
 );
 
-pub(crate) type InstanceLocation = (
+type InstanceLocation = (
     f64,
     Option<f64>,
     Option<f64>,
@@ -39,7 +39,7 @@ pub(crate) type InstanceLocation = (
 );
 
 impl DesignspaceContext {
-    pub(crate) fn from_path(designspace_path: &Path) -> Self {
+    fn from_path(designspace_path: &Path) -> Self {
         let designspace = designspace::DesignSpaceDocument::load(designspace_path)
             .expect("Cannot load Designspace.");
 
@@ -89,7 +89,7 @@ impl DesignspaceContext {
         }
     }
 
-    pub(crate) fn id_for_source_name(&self, source: &designspace::Source) -> LayerId {
+    fn id_for_source_name(&self, source: &designspace::Source) -> LayerId {
         if source.layer.is_none() {
             LayerId::Master(self.ids[&source.name].clone())
         } else {
@@ -107,7 +107,7 @@ impl DesignspaceContext {
     }
 
     // TODO: Fix reliance on the order of dimensions in the location.
-    pub(crate) fn design_location(location: &[designspace::Dimension]) -> DesignLocation {
+    fn design_location(location: &[designspace::Dimension]) -> DesignLocation {
         let location_at = |i: usize| {
             location
                 .get(i)
@@ -123,7 +123,7 @@ impl DesignspaceContext {
         )
     }
 
-    pub(crate) fn design_location_float(location: &[designspace::Dimension]) -> InstanceLocation {
+    fn design_location_float(location: &[designspace::Dimension]) -> InstanceLocation {
         let location_at = |i: usize| location.get(i).map(|dim| dim.xvalue.unwrap_or(0.0) as f64);
         (
             location_at(0).unwrap_or(0.0),
@@ -135,7 +135,7 @@ impl DesignspaceContext {
         )
     }
 
-    pub(crate) fn axis_by_name(&self, name: &str) -> &designspace::Axis {
+    fn axis_by_name(&self, name: &str) -> &designspace::Axis {
         self.designspace
             .axes
             .iter()
@@ -144,7 +144,7 @@ impl DesignspaceContext {
     }
 
     // TODO: Fix reliance on the order of dimensions in the location and axes.
-    pub(crate) fn axis_location(&self, source: &designspace::Source) -> Plist {
+    fn axis_location(&self, source: &designspace::Source) -> Plist {
         let map_backwards = |axis: &designspace::Axis, value: f32| {
             if let Some(mapping) = &axis.map {
                 mapping
@@ -182,7 +182,7 @@ impl DesignspaceContext {
             .into()
     }
 
-    pub(crate) fn global_axes(&self) -> Plist {
+    fn global_axes(&self) -> Plist {
         self.designspace
             .axes
             .iter()
@@ -201,18 +201,18 @@ impl DesignspaceContext {
     }
 }
 
-pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
-    let context = DesignspaceContext::from_path(&designspace_path);
+pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
+    let context = DesignspaceContext::from_path(designspace_path);
 
-    let mut glyphs: HashMap<String, glyphstool::Glyph> = HashMap::new();
-    let mut font_master: Vec<glyphstool::FontMaster> = Vec::new();
+    let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
+    let mut font_master: Vec<glyphs_plist::FontMaster> = Vec::new();
     let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
+    // TODO: Determine these from the default source.
     let mut family_name: Option<String> = None;
     let mut units_per_em: Option<i64> = None;
     let mut version_major: Option<i64> = None;
     let mut version_minor: Option<i64> = None;
-
     let mut disables_automatic_alignment = None;
     let mut glyph_order: Option<Vec<String>> = None;
 
@@ -220,6 +220,8 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         let layer_id = context.id_for_source_name(source);
         let font = &context.ufos[&source.filename];
 
+        // TODO: Do a first pass over sources and generate FontMasters first,
+        // then do a second pass dealing with glyphs.
         if source.layer.is_none() {
             if let (None, Some(source_family_name)) = (&family_name, &font.font_info.family_name) {
                 family_name.replace(source_family_name.clone());
@@ -330,7 +332,7 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
             );
             other_stuff.insert("customParameters".into(), custom_parameters.into());
 
-            font_master.push(glyphstool::FontMaster {
+            font_master.push(glyphs_plist::FontMaster {
                 id: id.clone(),
                 italic_angle,
                 weight_value: Some(weight_value),
@@ -352,30 +354,9 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         };
 
         for glyph in ufo_layer.iter() {
-            let converted_glyph = glyphs.entry(glyph.name().to_string()).or_insert_with(|| {
-                let unicode = if !glyph.codepoints.is_empty() {
-                    Some(
-                        glyph
-                            .codepoints
-                            .iter()
-                            .map(|c| format!("{:04X}", c as usize))
-                            .collect::<Vec<_>>()
-                            .join(",")
-                            .into(),
-                    )
-                } else {
-                    None
-                };
-
-                glyphstool::Glyph {
-                    unicode,
-                    glyphname: glyph.name().to_string().into(),
-                    layers: Default::default(),
-                    other_stuff: Default::default(),
-                    left_kerning_group: None,
-                    right_kerning_group: None,
-                }
-            });
+            let converted_glyph = glyphs
+                .entry(glyph.name().to_string())
+                .or_insert_with(|| new_glyph_from(glyph));
 
             let (associated_master_id, layer_id) = match &layer_id {
                 LayerId::Master(id) => (None, id.clone()),
@@ -383,74 +364,31 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                     (Some(parent_id.clone()), child_id.clone())
                 }
             };
-            let width = glyph.width;
-            let mut paths: Vec<glyphstool::Path> = Vec::new();
-            let mut components: Vec<glyphstool::Component> = Vec::new();
-            let mut anchors: Vec<glyphstool::Anchor> = Vec::new();
-            let guide_lines = None;
-            let other_stuff: HashMap<String, Plist> = HashMap::new();
 
-            for contour in glyph.contours.iter() {
-                let mut nodes: Vec<glyphstool::Node> = contour
-                    .points
-                    .iter()
-                    .map(|point| glyphstool::Node {
-                        pt: kurbo::Point::new(point.x, point.y),
-                        node_type: match (&point.typ, point.smooth) {
-                            (norad::PointType::Move, _) => glyphstool::NodeType::Line,
-                            (norad::PointType::Line, true) => glyphstool::NodeType::LineSmooth,
-                            (norad::PointType::Line, false) => glyphstool::NodeType::Line,
-                            (norad::PointType::OffCurve, _) => glyphstool::NodeType::OffCurve,
-                            (norad::PointType::Curve, true) => glyphstool::NodeType::CurveSmooth,
-                            (norad::PointType::Curve, false) => glyphstool::NodeType::Curve,
-                            (norad::PointType::QCurve, true) => todo!(),
-                            (norad::PointType::QCurve, false) => todo!(),
-                        },
-                    })
-                    .collect();
-                if contour.is_closed() {
-                    nodes.rotate_left(1);
-                }
+            let paths: Vec<glyphs_plist::Path> = glyph
+                .contours
+                .iter()
+                .map(|contour| contour.into())
+                .collect();
 
-                paths.push(glyphstool::Path {
-                    closed: contour.is_closed(),
-                    nodes,
-                });
-            }
+            let components: Vec<glyphs_plist::Component> = glyph
+                .components
+                .iter()
+                .map(|component| component.into())
+                .collect();
 
-            for component in glyph.components.iter() {
-                components.push(glyphstool::Component {
-                    name: component.base.to_string(),
-                    transform: if component.transform == Default::default() {
-                        None
-                    } else {
-                        Some(kurbo::Affine::new([
-                            component.transform.x_scale,
-                            component.transform.xy_scale,
-                            component.transform.yx_scale,
-                            component.transform.y_scale,
-                            component.transform.x_offset,
-                            component.transform.y_offset,
-                        ]))
-                    },
-                    other_stuff: Default::default(),
-                })
-            }
-
-            for anchor in glyph.anchors.iter() {
-                if let Some(name) = &anchor.name {
-                    anchors.push(glyphstool::Anchor {
-                        name: name.to_string(),
-                        position: kurbo::Point::new(anchor.x, anchor.y),
-                    });
-                }
-            }
+            let anchors: Vec<glyphs_plist::Anchor> = glyph
+                .anchors
+                .iter()
+                .filter(|anchor| anchor.name.is_some())
+                .map(|anchor| anchor.into())
+                .collect();
 
             converted_glyph.layers.push(Layer {
                 name: source.layer.clone(),
                 associated_master_id,
                 layer_id,
-                width,
+                width: glyph.width,
                 paths: if !paths.is_empty() { Some(paths) } else { None },
                 components: if !components.is_empty() {
                     Some(components)
@@ -462,13 +400,13 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
                 } else {
                     None
                 },
-                guide_lines,
-                other_stuff,
+                guide_lines: None,
+                other_stuff: Default::default(),
             });
         }
     }
 
-    let mut instances: Vec<glyphstool::Instance> = Vec::new();
+    let mut instances: Vec<glyphs_plist::Instance> = Vec::new();
     for instance in context.designspace.instances.iter() {
         let name = instance.stylename.clone().unwrap_or_default();
         let (
@@ -495,7 +433,7 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         let link_style = instance.stylemapfamilyname.clone();
         let other_stuff: HashMap<String, Plist> = HashMap::new();
 
-        instances.push(glyphstool::Instance {
+        instances.push(glyphs_plist::Instance {
             name,
             interpolation_weight: Some(interpolation_weight),
             interpolation_width,
@@ -511,13 +449,6 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
     }
 
     other_stuff.insert(".appVersion".into(), String::from("1361").into());
-    other_stuff.insert(
-        "familyName".into(),
-        family_name.unwrap_or(String::from("New Font")).into(),
-    );
-    other_stuff.insert("unitsPerEm".into(), units_per_em.unwrap_or(1000).into());
-    other_stuff.insert("versionMajor".into(), version_major.unwrap_or(1).into());
-    other_stuff.insert("versionMinor".into(), version_minor.unwrap_or(0).into());
 
     let mut custom_parameters: Vec<Plist> = Vec::new();
     custom_parameters.push(
@@ -565,11 +496,26 @@ pub(crate) fn command_to_glyphs(designspace_path: &Path) -> glyphstool::Font {
         disables_automatic_alignment = Some(true);
     }
 
-    glyphstool::Font {
-        glyphs,
-        font_master,
-        other_stuff,
+    glyphs_plist::Font {
         disables_automatic_alignment,
+        family_name: family_name.unwrap_or(String::from("New Font")),
+        font_master,
+        glyphs,
         instances: Some(instances),
+        other_stuff,
+        units_per_em: units_per_em.unwrap_or(1000),
+        version_major: version_major.unwrap_or(1),
+        version_minor: version_minor.unwrap_or(0),
+    }
+}
+
+fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
+    glyphs_plist::Glyph {
+        unicode: Some(glyph.codepoints.clone()),
+        glyphname: glyph.name().clone(),
+        layers: Default::default(),
+        other_stuff: Default::default(),
+        left_kerning_group: None,
+        right_kerning_group: None,
     }
 }

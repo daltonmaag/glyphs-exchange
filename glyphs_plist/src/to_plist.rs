@@ -1,4 +1,4 @@
-pub use plist_derive::ToPlist;
+pub use glyphs_plist_derive::ToPlist;
 
 use crate::plist::Plist;
 
