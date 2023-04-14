@@ -344,29 +344,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .map(instance_from)
         .collect();
 
-    // let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
-    // for source in context.designspace.sources.iter() {
-    //     let layer_id = context.id_for_source_name(source);
-    //     let font = &context.ufos[&source.filename];
-
-    //     let ufo_layer = match &layer_id {
-    //         LayerId::Master(_) => font.default_layer(),
-    //         LayerId::AssociatedWithMaster(_, _, layer_name) => {
-    //             font.layers.get(layer_name).unwrap_or_else(|| {
-    //                 panic!("Cannot find layer {} in {}.", layer_name, &source.filename)
-    //             })
-    //         }
-    //     };
-
-    //     for glyph in ufo_layer.iter() {
-    //         let converted_glyph = glyphs
-    //             .entry(glyph.name().to_string())
-    //             .or_insert_with(|| new_glyph_from(glyph));
-
-    //         let layer = layer_from(&layer_id, glyph);
-    //         converted_glyph.layers.push(layer);
-    //     }
-    // }
+    // TODO: Does this work as before and is it faster?
 
     let mut glyphs: Vec<(LayerId, HashMap<norad::Name, glyphs_plist::Layer>)> = context
         .designspace
