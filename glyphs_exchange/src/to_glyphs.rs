@@ -324,8 +324,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
                 custom_value3,
             ) = DesignspaceContext::design_location(&source.location);
 
-            let mut other_stuff: HashMap<String, Plist> = HashMap::new();
-
             let ascender = font
                 .font_info
                 .ascender
@@ -348,19 +346,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
                 .unwrap_or(500);
             let italic_angle = font.font_info.italic_angle.map(|v| -v);
 
-            other_stuff.insert("ascender".into(), ascender.into());
-            other_stuff.insert("capHeight".into(), cap_height.into());
-            other_stuff.insert("descender".into(), descender.into());
-            other_stuff.insert("xHeight".into(), x_height.into());
-
-            let mut custom_parameters: Vec<Plist> = Vec::new();
-            custom_parameters.push(
-                hashmap! {
-                    "name".into() => String::from("Axis Location").into(),
-                    "value".into() => context.axis_location(source),
-                }
-                .into(),
-            );
             // The "Master Name" custom parameter is the only place where it
             // stays safe, because Glyphs leaves out fields in FontMaster it
             // thinks it can regenerate. GlyphsLib uses the style name rather
@@ -369,25 +354,34 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
                 .stylename
                 .as_ref()
                 .expect("Source must have a stylename");
-            custom_parameters.push(
-                hashmap! {
-                    "name".into() => String::from("Master Name").into(),
-                    "value".into() => source_name.to_string().into(),
-                }
-                .into(),
-            );
-            other_stuff.insert("customParameters".into(), custom_parameters.into());
+
+            let other_stuff = hashmap! {
+                "customParameters".into() => vec![
+                    hashmap! {
+                        "name".into() => String::from("Axis Location").into(),
+                        "value".into() => context.axis_location(source),
+                    }.into(),
+                    hashmap! {
+                        "name".into() => String::from("Master Name").into(),
+                        "value".into() => source_name.to_string().into(),
+                    }.into(),
+                ].into(),
+            };
 
             font_master.push(glyphs_plist::FontMaster {
-                id: id.clone(),
-                italic_angle,
-                weight_value: Some(weight_value),
-                width_value,
+                ascender: Some(ascender),
+                cap_height: Some(cap_height),
                 custom_value,
                 custom_value1,
                 custom_value2,
                 custom_value3,
+                descender: Some(descender),
+                id: id.clone(),
+                italic_angle,
                 other_stuff,
+                weight_value: Some(weight_value),
+                width_value,
+                x_height: Some(x_height),
             });
         }
 
