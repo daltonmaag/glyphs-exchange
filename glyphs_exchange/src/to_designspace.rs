@@ -106,76 +106,27 @@ fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphs_plist::Layer) -> norad::Glyp
     // TODO: Figure out height: only interesting if there is a vertical origin?
     ufo_glyph.width = layer.width;
 
-    if let Some(anchors) = &layer.anchors {
-        for anchor in anchors.iter() {
-            ufo_glyph.anchors.push(norad::Anchor::new(
-                anchor.position.x,
-                anchor.position.y,
-                Some(norad::Name::new(&anchor.name).expect("Cannot convert anchor name")),
-                None,
-                None,
-                None,
-            ));
-        }
-    }
-
-    if let Some(paths) = &layer.paths {
-        for path in paths.iter() {
-            let mut points: Vec<norad::ContourPoint> = path
-                .nodes
-                .iter()
-                .map(|node| {
-                    let (typ, smooth) = match &node.node_type {
-                        glyphs_plist::NodeType::Curve => (norad::PointType::Curve, false),
-                        glyphs_plist::NodeType::CurveSmooth => (norad::PointType::Curve, true),
-                        glyphs_plist::NodeType::Line => (norad::PointType::Line, false),
-                        glyphs_plist::NodeType::LineSmooth => (norad::PointType::Line, true),
-                        glyphs_plist::NodeType::OffCurve => (norad::PointType::OffCurve, false),
-                    };
-                    norad::ContourPoint::new(node.pt.x, node.pt.y, typ, smooth, None, None, None)
-                })
-                .collect();
-            if !path.closed {
-                assert!(points[0].typ == norad::PointType::Line && !points[0].smooth);
-                points[0].typ = norad::PointType::Move;
-            } else {
-                // In Glyphs.app, the starting node of a closed contour is
-                // always stored at the end of the nodes list.
-                points.rotate_right(1);
-            }
-
-            ufo_glyph
-                .contours
-                .push(norad::Contour::new(points, None, None));
-        }
-    }
-
-    if let Some(components) = &layer.components {
-        for component in components.iter() {
-            let transform = if let Some(transform) = component.transform {
-                let coeffs = transform.as_coeffs();
-                norad::AffineTransform {
-                    x_scale: coeffs[0],
-                    xy_scale: coeffs[1],
-                    yx_scale: coeffs[2],
-                    y_scale: coeffs[3],
-                    x_offset: coeffs[4],
-                    y_offset: coeffs[5],
-                }
-            } else {
-                norad::AffineTransform::default()
-            };
-
-            let ufo_component = norad::Component::new(
-                norad::Name::new(&component.name).expect("Can't convert component name"),
-                transform,
-                None,
-                None,
-            );
-
-            ufo_glyph.components.push(ufo_component);
-        }
-    }
+    ufo_glyph.anchors.extend(
+        layer
+            .anchors
+            .iter()
+            .flat_map(|anchors| anchors.iter())
+            .map(|anchor| anchor.try_into().expect("Cannot convert anchor name")),
+    );
+    ufo_glyph.contours.extend(
+        layer
+            .paths
+            .iter()
+            .flat_map(|paths| paths.iter())
+            .map(|path| path.into()),
+    );
+    ufo_glyph.components.extend(
+        layer
+            .components
+            .iter()
+            .flat_map(|components| components.iter())
+            .map(|component| component.try_into().expect("Cannot convert component name")),
+    );
 
     ufo_glyph
 }

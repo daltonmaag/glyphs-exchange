@@ -366,41 +366,20 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
             let paths: Vec<glyphs_plist::Path> = glyph
                 .contours
                 .iter()
-                .map(|contour| {
-                    let mut nodes: Vec<glyphs_plist::Node> =
-                        contour.points.iter().map(node_to_contourpoint).collect();
-                    if contour.is_closed() {
-                        nodes.rotate_left(1);
-                    }
-                    glyphs_plist::Path {
-                        closed: contour.is_closed(),
-                        nodes,
-                    }
-                })
+                .map(|contour| contour.into())
                 .collect();
 
             let components: Vec<glyphs_plist::Component> = glyph
                 .components
                 .iter()
-                .map(|component| glyphs_plist::Component {
-                    name: component.base.to_string(),
-                    transform: if component.transform == Default::default() {
-                        None
-                    } else {
-                        Some(component.transform.into())
-                    },
-                    other_stuff: Default::default(),
-                })
+                .map(|component| component.into())
                 .collect();
 
             let anchors: Vec<glyphs_plist::Anchor> = glyph
                 .anchors
                 .iter()
                 .filter(|anchor| anchor.name.is_some())
-                .map(|anchor| glyphs_plist::Anchor {
-                    name: anchor.name.as_ref().unwrap().as_str().to_string(),
-                    position: kurbo::Point::new(anchor.x, anchor.y),
-                })
+                .map(|anchor| anchor.into())
                 .collect();
 
             converted_glyph.layers.push(Layer {
@@ -551,25 +530,5 @@ fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
         other_stuff: Default::default(),
         left_kerning_group: None,
         right_kerning_group: None,
-    }
-}
-
-fn node_to_contourpoint(point: &norad::ContourPoint) -> glyphs_plist::Node {
-    glyphs_plist::Node {
-        pt: kurbo::Point::new(point.x, point.y),
-        node_type: match (&point.typ, point.smooth) {
-            (norad::PointType::Move, _) => glyphs_plist::NodeType::Line,
-            (norad::PointType::Line, true) => glyphs_plist::NodeType::LineSmooth,
-            (norad::PointType::Line, false) => glyphs_plist::NodeType::Line,
-            (norad::PointType::OffCurve, _) => glyphs_plist::NodeType::OffCurve,
-            (norad::PointType::Curve, true) => glyphs_plist::NodeType::CurveSmooth,
-            (norad::PointType::Curve, false) => glyphs_plist::NodeType::Curve,
-            (norad::PointType::QCurve, true) => {
-                unimplemented!("Quadratic curves are not currently supported")
-            }
-            (norad::PointType::QCurve, false) => {
-                unimplemented!("Quadratic curves are not currently supported")
-            }
-        },
     }
 }
