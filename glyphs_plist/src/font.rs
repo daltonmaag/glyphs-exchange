@@ -32,8 +32,7 @@ pub struct Glyph {
     // The Unicode values(s) for the glyph.
     pub unicode: Option<norad::Codepoints>,
     pub layers: Vec<Layer>,
-    /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
-    /// quotes around the name "infinity", making it parse as a float instead.
+    /// The name of the glyph.
     pub glyphname: norad::Name,
     pub left_kerning_group: Option<String>,
     pub right_kerning_group: Option<String>,
@@ -158,6 +157,8 @@ impl FromPlist for norad::Name {
         match plist {
             Plist::String(s) => Self::new(s.as_str())
                 .unwrap_or_else(|e| panic!("Cannot parse glyphname '{}': {:?}", s, e)),
+            // Due to Glyphs.app quirks removing quotes around the name "infinity",
+            // it is parsed as a float instead.
             Plist::Float(f) if f.is_infinite() => Self::new("infinity").unwrap(),
             _ => panic!("Cannot parse glyphname '{:?}'", plist),
         }
