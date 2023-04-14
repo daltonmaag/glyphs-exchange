@@ -121,7 +121,7 @@ fn add_ser_rest(data: &Data) -> TokenStream {
                         let name = &f.ident;
                         return quote_spanned! { f.span() =>
                             let mut hashmap = self.#name;
-                        }
+                        };
                     }
                 }
                 quote! { let mut hashmap = HashMap::new(); }

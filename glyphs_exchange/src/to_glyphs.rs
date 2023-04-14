@@ -500,9 +500,9 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         other_stuff,
         disables_automatic_alignment,
         instances: Some(instances),
-        family_name: family_name.unwrap_or(String::from("New Font")).into(),
-        version_major: version_major.unwrap_or(1).into(),
-        version_minor: version_minor.unwrap_or(0).into(),
+        family_name: family_name.unwrap_or(String::from("New Font")),
+        version_major: version_major.unwrap_or(1),
+        version_minor: version_minor.unwrap_or(0),
         units_per_em: units_per_em.unwrap_or(1000),
     }
 }

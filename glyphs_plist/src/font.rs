@@ -173,13 +173,13 @@ impl ToPlist for norad::Name {
 impl FromPlist for norad::Codepoints {
     fn from_plist(plist: Plist) -> Self {
         let parse_str_as_char = |s: &str| -> char {
-            let cp = u32::from_str_radix(&s, 16).unwrap();
+            let cp = u32::from_str_radix(s, 16).unwrap();
             char::try_from(cp).unwrap()
         };
 
         match plist {
             Plist::String(s) => norad::Codepoints::new(
-                s.split(",")
+                s.split(',')
                     .filter(|s| !s.trim().is_empty())
                     .map(|cp| parse_str_as_char(cp)),
             ),
@@ -318,13 +318,11 @@ impl FontMaster {
     pub fn name(&self) -> &str {
         self.other_stuff
             .get("customParameters")
-            .and_then(|cps| {
-                Some(
-                    cps.as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|cp| cp.as_dict().unwrap()),
-                )
+            .map(|cps| {
+                cps.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|cp| cp.as_dict().unwrap())
             })
             .and_then(|mut cps| {
                 cps.find(|cp| cp.get("name").unwrap().as_str().unwrap() == "Master Name")
