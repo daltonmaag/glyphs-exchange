@@ -511,20 +511,8 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
 }
 
 fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
-    let unicode = if !glyph.codepoints.is_empty() {
-        Some(
-            glyph
-                .codepoints
-                .iter()
-                .map(|c| format!("{:04X}", c as usize))
-                .collect::<Vec<_>>()
-                .join(","),
-        )
-    } else {
-        None
-    };
     glyphs_plist::Glyph {
-        unicode,
+        unicode: Some(glyph.codepoints.clone()),
         glyphname: glyph.name().to_string().into(),
         layers: Default::default(),
         other_stuff: Default::default(),

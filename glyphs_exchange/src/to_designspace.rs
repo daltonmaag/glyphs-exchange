@@ -16,7 +16,7 @@ struct Glyphs2DesignspaceContext {
 
 impl Glyphs2DesignspaceContext {
     fn from_paths(glyphs_path: &Path, designspace_path: &Path) -> Self {
-        let font = glyphs_plist::Font::load(glyphs_path).expect("Cannot load Glyphs file");
+        let font = glyphs_plist::Font::load(&glyphs_path).expect("Cannot load Glyphs file");
         let designspace = designspace::DesignSpaceDocument::load(designspace_path)
             .expect("Cannot load Designspace");
 

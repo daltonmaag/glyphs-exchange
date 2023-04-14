@@ -25,7 +25,8 @@ pub struct Font {
 
 #[derive(Clone, Debug, FromPlist, ToPlist)]
 pub struct Glyph {
-    pub unicode: Option<String>,
+    // The Unicode values(s) for the glyph.
+    pub unicode: Option<norad::Codepoints>,
     pub layers: Vec<Layer>,
     /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
     /// quotes around the name "infinity", making it parse as a float instead.
@@ -122,7 +123,7 @@ pub struct Instance {
 }
 
 impl Font {
-    pub fn load(path: &std::path::Path) -> Result<Font, String> {
+    pub fn load(path: &dyn AsRef<std::path::Path>) -> Result<Font, String> {
         let contents = std::fs::read_to_string(path).map_err(|e| format!("{:?}", e))?;
         let plist = Plist::parse(&contents).map_err(|e| format!("{:?}", e))?;
         Ok(FromPlist::from_plist(plist))
@@ -159,6 +160,35 @@ impl Glyph {
             }
             _ => panic!("Cannot parse glyphname"),
         }
+    }
+}
+
+impl FromPlist for norad::Codepoints {
+    fn from_plist(plist: Plist) -> Self {
+        let parse_str_as_cp = |s: &str| -> char {
+            let cp = u32::from_str_radix(&s, 16).unwrap();
+            char::try_from(cp).unwrap()
+        };
+
+        if let Some(s) = plist.as_str() {
+            return norad::Codepoints::new(s.split(",").map(|cp| parse_str_as_cp(cp)));
+        } else if let Some(n) = plist.as_i64() {
+            let s = format!("{n}");
+            let cp = u32::from_str_radix(&s, 16).unwrap();
+            let cp = char::try_from(cp).unwrap();
+            return norad::Codepoints::new([cp]);
+        }
+        panic!("Cannot parse codepoints: {:?}", plist)
+    }
+}
+
+impl ToPlist for norad::Codepoints {
+    fn to_plist(self) -> Plist {
+        self.iter()
+            .map(|c| format!("{:04X}", c as usize))
+            .collect::<Vec<_>>()
+            .join(",")
+            .into()
     }
 }
 
