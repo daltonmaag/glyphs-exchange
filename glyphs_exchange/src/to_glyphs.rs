@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use maplit::hashmap;
-use norad::designspace;
+use norad::designspace::{self};
 
 use glyphs_plist;
 use glyphs_plist::{Layer, Plist};
@@ -12,6 +12,16 @@ struct DesignspaceContext {
     designspace: designspace::DesignSpaceDocument,
     ufos: HashMap<String, norad::Font>,
     ids: HashMap<String, String>,
+}
+
+#[derive(Debug)]
+struct FontProperties {
+    disables_automatic_alignment: bool,
+    family_name: String,
+    glyph_order: Option<Vec<String>>,
+    units_per_em: i64,
+    version_major: i64,
+    version_minor: i64,
 }
 
 #[derive(Debug)]
@@ -145,30 +155,12 @@ impl DesignspaceContext {
 
     // TODO: Fix reliance on the order of dimensions in the location and axes.
     fn axis_location(&self, source: &designspace::Source) -> Plist {
-        let map_backwards = |axis: &designspace::Axis, value: f32| {
-            if let Some(mapping) = &axis.map {
-                mapping
-                    .iter()
-                    .find(|map| map.output == value)
-                    .map(|map| map.input)
-                    .ok_or_else(|| {
-                        format!(
-                            "Could not find exact axis design to user mapping; axis {}, value {}",
-                            &axis.name, value
-                        )
-                    })
-                    .unwrap()
-            } else {
-                value
-            }
-        };
-
         source
             .location
             .iter()
             .map(|dim| {
                 let axis = self.axis_by_name(&dim.name);
-                let value = map_backwards(axis, dim.xvalue.unwrap_or(0.0));
+                let value = Self::map_axis_value_backwards(axis, dim.xvalue.unwrap_or(0.0));
                 Plist::Dictionary(
                     vec![
                         ("Axis".to_string(), Plist::String(axis.name.clone())),
@@ -199,6 +191,109 @@ impl DesignspaceContext {
             .collect::<Vec<_>>()
             .into()
     }
+
+    fn map_axis_value_backwards(axis: &designspace::Axis, value: f32) -> f32 {
+        if let Some(mapping) = &axis.map {
+            mapping
+                .iter()
+                .find(|map| map.output == value)
+                .map(|map| map.input)
+                .ok_or_else(|| {
+                    format!(
+                        "Could not find exact axis design to user mapping; axis {}, value {}",
+                        &axis.name, value
+                    )
+                })
+                .unwrap()
+        } else {
+            value
+        }
+    }
+
+    fn map_axis_value_forwards(axis: &designspace::Axis, value: f32) -> f32 {
+        if let Some(mapping) = &axis.map {
+            mapping
+                .iter()
+                .find(|map| map.input == value)
+                .map(|map| map.output)
+                .ok_or_else(|| {
+                    format!(
+                        "Could not find exact axis design to user mapping; axis {}, value {}",
+                        &axis.name, value
+                    )
+                })
+                .unwrap()
+        } else {
+            value
+        }
+    }
+
+    fn default_source(&self) -> &designspace::Source {
+        let default_location: Vec<designspace::Dimension> = self
+            .designspace
+            .axes
+            .iter()
+            .map(|a| designspace::Dimension {
+                name: a.name.clone(),
+                xvalue: Some(Self::map_axis_value_forwards(a, a.default)),
+                ..Default::default()
+            })
+            .collect();
+        self.designspace
+            .sources
+            .iter()
+            .find(|source| source.location == default_location)
+            .expect("Could not find default source")
+    }
+}
+
+impl FontProperties {
+    fn from_context(context: &DesignspaceContext) -> Self {
+        let default_source = context.default_source();
+        let default_ufo = context.ufos.get(&default_source.filename).unwrap();
+
+        let family_name: String = default_ufo
+            .font_info
+            .family_name
+            .clone()
+            .unwrap_or(String::from("New Font"));
+        let units_per_em: i64 = default_ufo
+            .font_info
+            .units_per_em
+            .map(|v| v.round() as i64)
+            .unwrap_or(1000);
+        let version_major: i64 = default_ufo
+            .font_info
+            .version_major
+            .map(|v| v as i64)
+            .unwrap_or(1);
+        let version_minor: i64 = default_ufo
+            .font_info
+            .version_minor
+            .map(|v| v as i64)
+            .unwrap_or(0);
+        let disables_automatic_alignment = default_ufo
+            .lib
+            .get("com.schriftgestaltung.customParameter.GSFont.disablesAutomaticAlignment")
+            .map(|v| v.as_boolean().unwrap_or(true))
+            .unwrap_or(true);
+        let glyph_order: Option<Vec<String>> = default_ufo.lib.get("public.glyphOrder").map(|v| {
+            v.as_array()
+                .expect("glyphOrder must be list of strings.")
+                .iter()
+                .map(|v| v.as_string().unwrap().to_string())
+                .collect()
+        });
+
+        Self {
+            disables_automatic_alignment,
+            family_name,
+            glyph_order,
+            units_per_em,
+            version_major,
+            version_minor,
+        }
+    }
 }
 
 pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
@@ -208,13 +303,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     let mut font_master: Vec<glyphs_plist::FontMaster> = Vec::new();
     let mut other_stuff: HashMap<String, Plist> = HashMap::new();
 
-    // TODO: Determine these from the default source.
-    let mut family_name: Option<String> = None;
-    let mut units_per_em: Option<i64> = None;
-    let mut version_major: Option<i64> = None;
-    let mut version_minor: Option<i64> = None;
-    let mut disables_automatic_alignment = None;
-    let mut glyph_order: Option<Vec<String>> = None;
+    let font_properties = FontProperties::from_context(&context);
 
     for source in context.designspace.sources.iter() {
         let layer_id = context.id_for_source_name(source);
@@ -223,49 +312,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         // TODO: Do a first pass over sources and generate FontMasters first,
         // then do a second pass dealing with glyphs.
         if source.layer.is_none() {
-            if let (None, Some(source_family_name)) = (&family_name, &font.font_info.family_name) {
-                family_name.replace(source_family_name.clone());
-            }
-            if let (None, Some(source_units_per_em)) = (&units_per_em, &font.font_info.units_per_em)
-            {
-                units_per_em.replace(source_units_per_em.round() as i64);
-            }
-            if let (None, Some(source_version_major)) =
-                (&version_major, &font.font_info.version_major)
-            {
-                version_major.replace(*source_version_major as i64);
-            }
-            if let (None, Some(source_version_minor)) =
-                (&version_minor, &font.font_info.version_minor)
-            {
-                version_minor.replace(*source_version_minor as i64);
-            }
-
-            if let (None, Some(source_disables_automatic_alignment)) = (
-                disables_automatic_alignment,
-                font.lib
-                    .get("com.schriftgestaltung.customParameter.GSFont.disablesAutomaticAlignment"),
-            ) {
-                disables_automatic_alignment
-                    .replace(source_disables_automatic_alignment.as_boolean().unwrap());
-            }
-
-            if let (None, Some(Some(source_glyph_order))) = (
-                &glyph_order,
-                font.lib.get("public.glyphOrder").map(|v| v.as_array()),
-            ) {
-                glyph_order.replace(
-                    source_glyph_order
-                        .iter()
-                        .map(|v| {
-                            v.as_string()
-                                .expect("glyphOrder must be list of strings.")
-                                .to_string()
-                        })
-                        .collect(),
-                );
-            }
-
             let LayerId::Master(id) = &layer_id else {
                 panic!("Master does not seem to be a master?!")
             };
@@ -458,7 +504,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         }
         .into(),
     );
-    if let Some(glyph_order) = &glyph_order {
+    if let Some(glyph_order) = &font_properties.glyph_order {
         let glyph_order_plist: Vec<Plist> =
             glyph_order.iter().map(|n| n.to_string().into()).collect();
         let glyph_order_plist = HashMap::from([
@@ -470,7 +516,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     other_stuff.insert("customParameters".into(), custom_parameters.into());
 
     // Glyphs need to be sorted like the glyphOrder.
-    let glyphs = if let Some(mut glyph_order) = glyph_order {
+    let glyphs = if let Some(mut glyph_order) = font_properties.glyph_order {
         let all_glyphs: HashSet<&String> = HashSet::from_iter(glyphs.keys());
         let ordered_glyphs: HashSet<&String> = HashSet::from_iter(&glyph_order);
         let mut leftovers: Vec<String> = all_glyphs
@@ -492,20 +538,16 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         glyphs.into_values().collect::<Vec<_>>()
     };
 
-    if disables_automatic_alignment.is_none() {
-        disables_automatic_alignment = Some(true);
-    }
-
     glyphs_plist::Font {
-        disables_automatic_alignment,
-        family_name: family_name.unwrap_or(String::from("New Font")),
+        disables_automatic_alignment: Some(font_properties.disables_automatic_alignment),
+        family_name: font_properties.family_name,
         font_master,
         glyphs,
         instances: Some(instances),
         other_stuff,
-        units_per_em: units_per_em.unwrap_or(1000),
-        version_major: version_major.unwrap_or(1),
-        version_minor: version_minor.unwrap_or(0),
+        units_per_em: font_properties.units_per_em,
+        version_major: font_properties.version_major,
+        version_minor: font_properties.version_minor,
     }
 }
 
