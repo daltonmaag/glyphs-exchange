@@ -30,7 +30,7 @@ pub struct Glyph {
     pub layers: Vec<Layer>,
     /// The name of the glyph. Is a Plist because of Glyphs.app quirks removing
     /// quotes around the name "infinity", making it parse as a float instead.
-    pub glyphname: Plist,
+    pub glyphname: norad::Name,
     pub left_kerning_group: Option<String>,
     pub right_kerning_group: Option<String>,
     #[rest]
@@ -135,11 +135,11 @@ impl Font {
     }
 
     pub fn get_glyph(&self, glyphname: &str) -> Option<&Glyph> {
-        self.glyphs.iter().find(|g| g.name() == glyphname)
+        self.glyphs.iter().find(|g| g.glyphname == glyphname)
     }
 
     pub fn get_glyph_mut(&mut self, glyphname: &str) -> Option<&mut Glyph> {
-        self.glyphs.iter_mut().find(|g| g.name() == glyphname)
+        self.glyphs.iter_mut().find(|g| g.glyphname == glyphname)
     }
 }
 
@@ -147,38 +147,46 @@ impl Glyph {
     pub fn get_layer(&self, layer_id: &str) -> Option<&Layer> {
         self.layers.iter().find(|l| l.layer_id == layer_id)
     }
+}
 
-    pub fn name(&self) -> &str {
-        match &self.glyphname {
-            Plist::String(s) => s.as_str(),
-            Plist::Float(f) => {
-                if f.is_infinite() {
-                    "infinity"
-                } else {
-                    panic!("Glyph name is misparsed as float, but isn't infinity?")
-                }
-            }
-            _ => panic!("Cannot parse glyphname"),
+impl FromPlist for norad::Name {
+    fn from_plist(plist: Plist) -> Self {
+        match plist {
+            Plist::String(s) => Self::new(s.as_str())
+                .unwrap_or_else(|e| panic!("Cannot parse glyphname '{}': {:?}", s, e)),
+            Plist::Float(f) if f.is_infinite() => Self::new("infinity").unwrap(),
+            _ => panic!("Cannot parse glyphname '{:?}'", plist),
         }
+    }
+}
+
+impl ToPlist for norad::Name {
+    fn to_plist(self) -> Plist {
+        self.to_string().into()
     }
 }
 
 impl FromPlist for norad::Codepoints {
     fn from_plist(plist: Plist) -> Self {
-        let parse_str_as_cp = |s: &str| -> char {
+        let parse_str_as_char = |s: &str| -> char {
             let cp = u32::from_str_radix(&s, 16).unwrap();
             char::try_from(cp).unwrap()
         };
 
-        if let Some(s) = plist.as_str() {
-            return norad::Codepoints::new(s.split(",").map(|cp| parse_str_as_cp(cp)));
-        } else if let Some(n) = plist.as_i64() {
-            let s = format!("{n}");
-            let cp = u32::from_str_radix(&s, 16).unwrap();
-            let cp = char::try_from(cp).unwrap();
-            return norad::Codepoints::new([cp]);
+        match plist {
+            Plist::String(s) => norad::Codepoints::new(
+                s.split(",")
+                    .filter(|s| !s.trim().is_empty())
+                    .map(|cp| parse_str_as_char(cp)),
+            ),
+            Plist::Integer(n) => {
+                let s = format!("{n}");
+                let cp = u32::from_str_radix(&s, 16).unwrap();
+                let cp = char::try_from(cp).unwrap();
+                norad::Codepoints::new([cp])
+            }
+            _ => panic!("Cannot parse codepoints: {:?}", plist),
         }
-        panic!("Cannot parse codepoints: {:?}", plist)
     }
 }
 

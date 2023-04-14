@@ -513,7 +513,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
 fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
     glyphs_plist::Glyph {
         unicode: Some(glyph.codepoints.clone()),
-        glyphname: glyph.name().to_string().into(),
+        glyphname: glyph.name().clone(),
         layers: Default::default(),
         other_stuff: Default::default(),
         left_kerning_group: None,
