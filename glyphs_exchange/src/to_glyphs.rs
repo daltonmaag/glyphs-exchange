@@ -311,7 +311,14 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .sources
         .iter()
         .filter(|source| source.layer.is_none())
-        .map(|source| master_from_source(&context, source))
+        .map(|source| master_from(&context, source))
+        .collect();
+
+    let instances: Vec<glyphs_plist::Instance> = context
+        .designspace
+        .instances
+        .iter()
+        .map(instance_from)
         .collect();
 
     for source in context.designspace.sources.iter() {
@@ -379,48 +386,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         }
     }
 
-    let mut instances: Vec<glyphs_plist::Instance> = Vec::new();
-    for instance in context.designspace.instances.iter() {
-        let name = instance.stylename.clone().unwrap_or_default();
-        let (
-            interpolation_weight,
-            interpolation_width,
-            interpolation_custom,
-            interpolation_custom1,
-            interpolation_custom2,
-            interpolation_custom3,
-        ) = DesignspaceContext::design_location_float(&instance.location);
-
-        // TODO: make norad::designspace use proper ufo type
-        let (is_bold, is_italic) = match &instance.stylemapstylename {
-            Some(style) => match style.as_str() {
-                "regular" => (false, false),
-                "bold" => (true, false),
-                "italic" => (false, true),
-                "bold italic" => (true, true),
-                _ => panic!("Unrecognized style map style name"),
-            },
-            None => (false, false),
-        };
-
-        let link_style = instance.stylemapfamilyname.clone();
-        let other_stuff: HashMap<String, Plist> = HashMap::new();
-
-        instances.push(glyphs_plist::Instance {
-            name,
-            interpolation_weight: Some(interpolation_weight),
-            interpolation_width,
-            interpolation_custom,
-            interpolation_custom1,
-            interpolation_custom2,
-            interpolation_custom3,
-            is_bold: Some(is_bold),
-            is_italic: Some(is_italic),
-            link_style,
-            other_stuff,
-        })
-    }
-
     let mut other_stuff: HashMap<String, Plist> = hashmap! {
         ".appVersion".into() => String::from("1361").into(),
     };
@@ -478,7 +443,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     }
 }
 
-fn master_from_source(
+fn master_from(
     context: &DesignspaceContext,
     source: &designspace::Source,
 ) -> glyphs_plist::FontMaster {
@@ -546,6 +511,47 @@ fn master_from_source(
         weight_value: Some(weight_value),
         width_value,
         x_height: Some(x_height),
+    }
+}
+
+fn instance_from(instance: &designspace::Instance) -> glyphs_plist::Instance {
+    let name = instance.stylename.clone().unwrap_or_default();
+    let (
+        interpolation_weight,
+        interpolation_width,
+        interpolation_custom,
+        interpolation_custom1,
+        interpolation_custom2,
+        interpolation_custom3,
+    ) = DesignspaceContext::design_location_float(&instance.location);
+
+    // TODO: make norad::designspace use proper ufo type
+    let (is_bold, is_italic) = match &instance.stylemapstylename {
+        Some(style) => match style.as_str() {
+            "regular" => (false, false),
+            "bold" => (true, false),
+            "italic" => (false, true),
+            "bold italic" => (true, true),
+            _ => panic!("Unrecognized style map style name"),
+        },
+        None => (false, false),
+    };
+
+    let link_style = instance.stylemapfamilyname.clone();
+    let other_stuff: HashMap<String, Plist> = HashMap::new();
+
+    glyphs_plist::Instance {
+        name,
+        interpolation_weight: Some(interpolation_weight),
+        interpolation_width,
+        interpolation_custom,
+        interpolation_custom1,
+        interpolation_custom2,
+        interpolation_custom3,
+        is_bold: Some(is_bold),
+        is_italic: Some(is_italic),
+        link_style,
+        other_stuff,
     }
 }
 
