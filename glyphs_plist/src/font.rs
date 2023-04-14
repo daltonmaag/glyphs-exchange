@@ -15,6 +15,10 @@ use crate::to_plist::ToPlist;
 
 #[derive(Debug, FromPlist, ToPlist)]
 pub struct Font {
+    pub family_name: String,
+    pub version_major: i64,
+    pub version_minor: i64,
+    pub units_per_em: i64,
     pub glyphs: Vec<Glyph>,
     pub font_master: Vec<FontMaster>,
     pub instances: Option<Vec<Instance>>,
@@ -327,5 +331,20 @@ impl FontMaster {
             })
             .and_then(|cp| cp.get("value").unwrap().as_str())
             .expect("Cannot determine name for master")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_empty_font_glyphs2() {
+        Font::load(&"../testdata/NewFont.glyphs").unwrap();
+    }
+
+    #[test]
+    fn parse_empty_font_glyphs3() {
+        Font::load(&"../testdata/NewFontG3.glyphs").unwrap();
     }
 }

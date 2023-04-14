@@ -447,13 +447,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     }
 
     other_stuff.insert(".appVersion".into(), String::from("1361").into());
-    other_stuff.insert(
-        "familyName".into(),
-        family_name.unwrap_or(String::from("New Font")).into(),
-    );
-    other_stuff.insert("unitsPerEm".into(), units_per_em.unwrap_or(1000).into());
-    other_stuff.insert("versionMajor".into(), version_major.unwrap_or(1).into());
-    other_stuff.insert("versionMinor".into(), version_minor.unwrap_or(0).into());
 
     let mut custom_parameters: Vec<Plist> = Vec::new();
     custom_parameters.push(
@@ -507,6 +500,10 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         other_stuff,
         disables_automatic_alignment,
         instances: Some(instances),
+        family_name: family_name.unwrap_or(String::from("New Font")).into(),
+        version_major: version_major.unwrap_or(1).into(),
+        version_minor: version_minor.unwrap_or(0).into(),
+        units_per_em: units_per_em.unwrap_or(1000),
     }
 }
 
