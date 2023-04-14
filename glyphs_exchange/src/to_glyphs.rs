@@ -3,6 +3,7 @@ use std::path::Path;
 
 use maplit::hashmap;
 use norad::designspace::{self};
+use rayon::prelude::*;
 
 use glyphs_plist;
 use glyphs_plist::{Layer, Plist};
@@ -18,16 +19,16 @@ struct DesignspaceContext {
 struct FontProperties {
     disables_automatic_alignment: bool,
     family_name: String,
-    glyph_order: Option<Vec<String>>,
+    glyph_order: Vec<String>,
     units_per_em: i64,
     version_major: i64,
     version_minor: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum LayerId {
     Master(String),
-    AssociatedWithMaster(String, String),
+    AssociatedWithMaster(String, String, String),
 }
 
 type DesignLocation = (
@@ -115,6 +116,7 @@ impl DesignspaceContext {
             LayerId::AssociatedWithMaster(
                 self.ids[&parent_source.name].clone(),
                 self.ids[&source.name].clone(),
+                source.layer.clone().unwrap(),
             )
         }
     }
@@ -280,13 +282,38 @@ impl FontProperties {
             .get("com.schriftgestaltung.customParameter.GSFont.disablesAutomaticAlignment")
             .map(|v| v.as_boolean().unwrap_or(true))
             .unwrap_or(true);
-        let glyph_order: Option<Vec<String>> = default_ufo.lib.get("public.glyphOrder").map(|v| {
-            v.as_array()
-                .expect("glyphOrder must be list of strings.")
-                .iter()
-                .map(|v| v.as_string().unwrap().to_string())
-                .collect()
-        });
+
+        let all_glyphs_set: HashSet<String> = default_ufo
+            .layers
+            .default_layer()
+            .iter()
+            .map(|glyph| glyph.name().to_string())
+            .collect();
+        let glyph_order: Vec<String> =
+            if let Some(glyph_order) = default_ufo.lib.get("public.glyphOrder") {
+                let mut glyph_order: Vec<String> = glyph_order
+                    .as_array()
+                    .expect("glyphOrder must be list of strings.")
+                    .iter()
+                    .map(|v| v.as_string().unwrap().to_string())
+                    .collect();
+
+                let glyph_order_set = HashSet::from_iter(&glyph_order);
+                let mut leftovers: Vec<String> = all_glyphs_set
+                    .iter()
+                    .collect::<HashSet<&String>>()
+                    .difference(&glyph_order_set)
+                    .map(|n| n.to_string())
+                    .collect();
+                leftovers.sort();
+                glyph_order.extend(leftovers);
+
+                glyph_order
+            } else {
+                let mut all_glyphs: Vec<String> = Vec::from_iter(all_glyphs_set);
+                all_glyphs.sort();
+                all_glyphs
+            };
 
         Self {
             disables_automatic_alignment,
@@ -317,71 +344,96 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .map(instance_from)
         .collect();
 
-    let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
-    for source in context.designspace.sources.iter() {
-        let layer_id = context.id_for_source_name(source);
-        let font = &context.ufos[&source.filename];
+    // let mut glyphs: HashMap<String, glyphs_plist::Glyph> = HashMap::new();
+    // for source in context.designspace.sources.iter() {
+    //     let layer_id = context.id_for_source_name(source);
+    //     let font = &context.ufos[&source.filename];
 
-        let ufo_layer = if source.layer.is_some() {
-            font.layers
-                .get(source.layer.as_ref().unwrap())
-                .expect("Cannot find layer.")
-        } else {
-            font.default_layer()
-        };
+    //     let ufo_layer = match &layer_id {
+    //         LayerId::Master(_) => font.default_layer(),
+    //         LayerId::AssociatedWithMaster(_, _, layer_name) => {
+    //             font.layers.get(layer_name).unwrap_or_else(|| {
+    //                 panic!("Cannot find layer {} in {}.", layer_name, &source.filename)
+    //             })
+    //         }
+    //     };
 
-        for glyph in ufo_layer.iter() {
-            let converted_glyph = glyphs
-                .entry(glyph.name().to_string())
-                .or_insert_with(|| new_glyph_from(glyph));
+    //     for glyph in ufo_layer.iter() {
+    //         let converted_glyph = glyphs
+    //             .entry(glyph.name().to_string())
+    //             .or_insert_with(|| new_glyph_from(glyph));
 
-            let layer = layer_from(&layer_id, glyph, source.layer.as_ref().map(|n| n.as_str()));
-            converted_glyph.layers.push(layer);
-        }
-    }
+    //         let layer = layer_from(&layer_id, glyph);
+    //         converted_glyph.layers.push(layer);
+    //     }
+    // }
 
-    let mut other_stuff: HashMap<String, Plist> = hashmap! {
-        ".appVersion".into() => String::from("1361").into(),
-    };
-
-    let mut custom_parameters: Vec<Plist> = vec![hashmap! {
-        "name".into() => String::from("Axes").into(),
-        "value".into() => context.global_axes(),
-    }
-    .into()];
-
-    if let Some(glyph_order) = &font_properties.glyph_order {
-        let glyph_order_plist: Vec<Plist> =
-            glyph_order.iter().map(|n| n.to_string().into()).collect();
-        let glyph_order_plist = HashMap::from([
-            ("name".into(), String::from("glyphOrder").into()),
-            ("value".into(), glyph_order_plist.into()),
-        ]);
-        custom_parameters.push(glyph_order_plist.into());
-    }
-    other_stuff.insert("customParameters".into(), custom_parameters.into());
+    let mut glyphs: Vec<(LayerId, HashMap<norad::Name, glyphs_plist::Layer>)> = context
+        .designspace
+        .sources
+        .iter()
+        .map(|source| {
+            let layer_id = context.id_for_source_name(source);
+            let font = &context.ufos[&source.filename];
+            let ufo_layer = match &layer_id {
+                LayerId::Master(_) => font.default_layer(),
+                LayerId::AssociatedWithMaster(_, _, layer_name) => {
+                    font.layers.get(layer_name).unwrap_or_else(|| {
+                        panic!("Cannot find layer {} in {}.", layer_name, &source.filename)
+                    })
+                }
+            };
+            (layer_id, ufo_layer)
+        })
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .map(|(layer_id, ufo_layer)| {
+            (
+                layer_id.clone(),
+                ufo_layer
+                    .iter()
+                    .map(|glyph| (glyph.name().clone(), layer_from(&layer_id, glyph)))
+                    .collect(),
+            )
+        })
+        .collect();
 
     // Glyphs need to be sorted like the glyphOrder.
-    let glyphs = if let Some(mut glyph_order) = font_properties.glyph_order {
-        let all_glyphs: HashSet<&String> = HashSet::from_iter(glyphs.keys());
-        let ordered_glyphs: HashSet<&String> = HashSet::from_iter(&glyph_order);
-        let mut leftovers: Vec<String> = all_glyphs
-            .difference(&ordered_glyphs)
-            .map(|n| n.to_string())
-            .collect();
-        leftovers.sort();
-        glyph_order.extend(leftovers);
+    let default_source = context.default_source();
+    let default_ufo = context.ufos.get(&default_source.filename).unwrap();
+    let default_ufo_layer = default_ufo.default_layer();
+    let glyphs: Vec<glyphs_plist::Glyph> = font_properties
+        .glyph_order
+        .iter()
+        .filter_map(|name| default_ufo_layer.get_glyph(name))
+        .map(|glyph| {
+            let mut converted_glyph = new_glyph_from(glyph);
+            converted_glyph.layers.extend(
+                glyphs
+                    .iter_mut()
+                    .filter_map(|(_, layers)| layers.remove(glyph.name())),
+            );
+            converted_glyph
+        })
+        .collect();
 
-        let mut glyphs_sorted = Vec::new();
-        for glyph_name in glyph_order {
-            if let Some(glyph) = glyphs.remove(&glyph_name) {
-                glyphs_sorted.push(glyph);
-            }
-        }
-        glyphs_sorted
-    } else {
-        // Random order :)
-        glyphs.into_values().collect::<Vec<_>>()
+    let glyph_order_plist: Vec<Plist> = font_properties
+        .glyph_order
+        .iter()
+        .map(|n| n.to_string().into())
+        .collect();
+    let other_stuff: HashMap<String, Plist> = hashmap! {
+        ".appVersion".into() => String::from("1361").into(),
+        "customParameters".into() => vec![
+            hashmap! {
+                "name".into() => String::from("Axes").into(),
+                "value".into() => context.global_axes(),
+            }.into(),
+            hashmap! {
+                "name".into() => String::from("glyphOrder").into(),
+                "value".into() => glyph_order_plist.into(),
+            }.into(),
+        ].into(),
     };
 
     glyphs_plist::Font {
@@ -509,12 +561,14 @@ fn instance_from(instance: &designspace::Instance) -> glyphs_plist::Instance {
     }
 }
 
-fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph, layer_name: Option<&str>) -> Layer {
-    let (associated_master_id, layer_id) = match layer_id {
-        LayerId::Master(id) => (None, id.clone()),
-        LayerId::AssociatedWithMaster(parent_id, child_id) => {
-            (Some(parent_id.clone()), child_id.clone())
-        }
+fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph) -> Layer {
+    let (associated_master_id, layer_id, layer_name) = match layer_id {
+        LayerId::Master(id) => (None, id.clone(), None),
+        LayerId::AssociatedWithMaster(parent_id, child_id, layer_name) => (
+            Some(parent_id.clone()),
+            child_id.clone(),
+            Some(layer_name.clone()),
+        ),
     };
 
     let paths: Vec<glyphs_plist::Path> = glyph
@@ -537,7 +591,7 @@ fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph, layer_name: Option<&str>
         .collect();
 
     let layer = Layer {
-        name: layer_name.as_ref().map(|n| n.to_string()),
+        name: layer_name,
         associated_master_id,
         layer_id,
         width: glyph.width,
