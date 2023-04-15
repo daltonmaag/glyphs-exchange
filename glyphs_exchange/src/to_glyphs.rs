@@ -343,6 +343,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .map(instance_from)
         .collect();
 
+    // First, convert the glyphs...
     let mut glyphs: Vec<HashMap<norad::Name, glyphs_plist::Layer>> = context
         .designspace
         .sources
@@ -370,7 +371,8 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         })
         .collect();
 
-    // Glyphs need to be sorted like the glyphOrder.
+    // ... and then sort them like the glyphOrder, or Glyphs.app will display
+    // them jumbled.
     let default_source = context.default_source();
     let default_ufo = context.ufos.get(&default_source.filename).unwrap();
     let default_ufo_layer = default_ufo.default_layer();
