@@ -343,8 +343,6 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
         .map(instance_from)
         .collect();
 
-    // TODO: Does this work as before and is it faster?
-
     let mut glyphs: Vec<HashMap<norad::Name, glyphs_plist::Layer>> = context
         .designspace
         .sources
