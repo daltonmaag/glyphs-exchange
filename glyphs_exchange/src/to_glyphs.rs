@@ -3,6 +3,7 @@ use std::path::Path;
 
 use maplit::hashmap;
 use norad::designspace;
+use rayon::prelude::*;
 
 use glyphs_plist;
 use glyphs_plist::{Layer, Plist};
@@ -75,7 +76,7 @@ impl DesignspaceContext {
             .collect();
         let designspace_dir = designspace_path.parent().unwrap();
         let ufos: HashMap<String, norad::Font> = unique_filenames
-            .into_iter()
+            .into_par_iter()
             .map(|filename| {
                 (
                     filename.clone(),
