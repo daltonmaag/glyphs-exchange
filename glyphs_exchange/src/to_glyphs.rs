@@ -2,8 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use maplit::hashmap;
-use norad::designspace::{self};
-use rayon::prelude::*;
+use norad::designspace;
 
 use glyphs_plist;
 use glyphs_plist::{Layer, Plist};
@@ -346,7 +345,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
 
     // TODO: Does this work as before and is it faster?
 
-    let mut glyphs: Vec<(LayerId, HashMap<norad::Name, glyphs_plist::Layer>)> = context
+    let mut glyphs: Vec<HashMap<norad::Name, glyphs_plist::Layer>> = context
         .designspace
         .sources
         .iter()
@@ -363,16 +362,13 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
             };
             (layer_id, ufo_layer)
         })
-        .collect::<Vec<_>>()
-        .into_par_iter()
+        // NOTE: Running this loop in parallel is not faster, or I'm holding
+        // rayon wrong...
         .map(|(layer_id, ufo_layer)| {
-            (
-                layer_id.clone(),
-                ufo_layer
-                    .iter()
-                    .map(|glyph| (glyph.name().clone(), layer_from(&layer_id, glyph)))
-                    .collect(),
-            )
+            ufo_layer
+                .iter()
+                .map(|glyph| (glyph.name().clone(), layer_from(&layer_id, glyph)))
+                .collect()
         })
         .collect();
 
@@ -389,7 +385,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
             converted_glyph.layers.extend(
                 glyphs
                     .iter_mut()
-                    .filter_map(|(_, layers)| layers.remove(glyph.name())),
+                    .filter_map(|layers| layers.remove(glyph.name())),
             );
             converted_glyph
         })
