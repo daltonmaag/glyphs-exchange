@@ -373,6 +373,7 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
 
     // ... and then sort them like the glyphOrder, or Glyphs.app will display
     // them jumbled.
+    // TODO: Reuse default_source from FontProperties? Make part of context?
     let default_source = context.default_source();
     let default_ufo = context.ufos.get(&default_source.filename).unwrap();
     let default_ufo_layer = default_ufo.default_layer();
