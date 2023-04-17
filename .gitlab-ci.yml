@@ -73,7 +73,7 @@ dist-windows:
   before_script:
     - set PATH=%PATH%;%CARGO_BIN%
   script:
-    - pwsh scripts/dist_windows.ps1
+    - powershell scripts/dist_windows.ps1
   artifacts:
     paths:
       - glyphs_exchange/target/wix/*.msi
