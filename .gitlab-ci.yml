@@ -71,6 +71,7 @@ dist-windows:
   variables:
     RUSTUP_HOME: "C:\\Users\\Public\\.rustup"
     CARGO_BIN: "C:\\Users\\Public\\.cargo\\bin"
+    WIX: "C:\\Program Files (x86)\\WiX Toolset v3.11\\"
   before_script:
     - set PATH=%PATH%;%CARGO_BIN%
   script:
