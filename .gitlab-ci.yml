@@ -7,10 +7,12 @@ cache:
       - Cargo.lock
   paths:  
     # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
-    - .cargo/bin/
-    - .cargo/registry/index/
-    - .cargo/registry/cache/
-    - .cargo/git/db/
+    - $CARGO_HOME/.crates.toml
+    - $CARGO_HOME/.crates2.json
+    - $CARGO_HOME/bin/
+    - $CARGO_HOME/registry/index/
+    - $CARGO_HOME/registry/cache/
+    - $CARGO_HOME/git/db/
     - target
 
 stages:
@@ -36,7 +38,6 @@ test-windows:
     - windows
   variables:
     RUSTUP_HOME: "C:\\Users\\Public\\.rustup"
-    CARGO_HOME: "C:\\Users\\Public\\.cargo"
     CARGO_BIN: "C:\\Users\\Public\\.cargo\\bin"
   before_script:
     - set PATH=%PATH%;%CARGO_BIN%
@@ -56,6 +57,7 @@ dist-macos:
   tags:
     - macos
   script:
+    - cargo build --release --target x86_64-apple-darwin
     - scripts/dist_macos.sh
   artifacts:
     paths:
@@ -67,7 +69,6 @@ dist-windows:
     - windows
   variables:
     RUSTUP_HOME: "C:\\Users\\Public\\.rustup"
-    CARGO_HOME: "C:\\Users\\Public\\.cargo"
     CARGO_BIN: "C:\\Users\\Public\\.cargo\\bin"
   before_script:
     - set PATH=%PATH%;%CARGO_BIN%
