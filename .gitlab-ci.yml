@@ -23,14 +23,14 @@ test-linux:
   stage: test
   image: rust:latest
   script:
-    - cargo test
+    - cargo test --locked
 
 test-macos:
   stage: test
   tags:
     - macos
   script:
-    - cargo test
+    - cargo test --locked
 
 test-windows:
   stage: test
@@ -42,7 +42,7 @@ test-windows:
   before_script:
     - set PATH=%PATH%;%CARGO_BIN%
   script:
-    - cargo test
+    - cargo test --locked
 
 lint:
   stage: test
@@ -57,7 +57,7 @@ dist-macos:
   tags:
     - macos
   script:
-    - cargo build --release --target x86_64-apple-darwin
+    - cargo build --locked --release --target x86_64-apple-darwin
     - scripts/dist_macos.sh
   artifacts:
     paths:
