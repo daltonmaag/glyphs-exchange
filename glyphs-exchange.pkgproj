@@ -659,7 +659,7 @@
 			<key>BUILD_PATH</key>
 			<dict>
 				<key>PATH</key>
-				<string>target/x86_64-apple-darwin/release</string>
+				<string>target/release</string>
 				<key>PATH_TYPE</key>
 				<integer>1</integer>
 			</dict>
