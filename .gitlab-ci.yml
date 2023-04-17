@@ -1,0 +1,73 @@
+variables:
+  CARGO_HOME: ".cargo"
+
+cache:
+  key:
+    files:
+      - Cargo.lock
+  paths:  
+    # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+    - .cargo/bin/
+    - .cargo/registry/index/
+    - .cargo/registry/cache/
+    - .cargo/git/db/
+    - target
+
+stages:
+  - test
+  - dist
+
+test-linux:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo test --locked --verbose
+
+test-macos:
+  stage: test
+  tags:
+    - macos
+  script:
+    - cargo test --locked --verbose
+
+test-windows:
+  stage: test
+  tags:
+    - windows
+  script:
+    - cargo test --locked --verbose
+
+check:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo test --locked --verbose
+    - rustup component add clippy
+    - cargo clippy --locked --all-features --all-targets -- -D warnings
+
+lint:
+  stage: test
+  image: rust:latest
+  script:
+    - rustup component add rustfmt
+    - cargo fmt -- --check
+
+dist-macos:
+  stage: dist
+  tags:
+    - macos
+  script:
+    - scripts/dist_macos.sh
+  artifacts:
+    paths:
+      - target/x86_64-apple-darwin/release/*.pkg
+
+dist-windows:
+  stage: dist
+  tags:
+    - windows
+  script:
+    - pwsh scripts/dist_windows.ps1
+  artifacts:
+    paths:
+      - glyphs_exchange/target/wix/*.msi
