@@ -527,7 +527,7 @@
 												<key>GID</key>
 												<integer>0</integer>
 												<key>PATH</key>
-												<string>target/x86_64-apple-darwin/release/glyphs-exchange</string>
+												<string>target/release/glyphs-exchange</string>
 												<key>PATH_TYPE</key>
 												<integer>1</integer>
 												<key>PERMISSIONS</key>
@@ -630,7 +630,7 @@
 			<key>FOLLOW_SYMBOLIC_LINKS</key>
 			<false/>
 			<key>IDENTIFIER</key>
-			<string>com.daltonmaag.glyphs-exchange.x86-64</string>
+			<string>com.daltonmaag.glyphs-exchange</string>
 			<key>LOCATION</key>
 			<integer>0</integer>
 			<key>NAME</key>
