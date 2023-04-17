@@ -21,27 +21,27 @@ test-linux:
   stage: test
   image: rust:latest
   script:
-    - cargo test --verbose
+    - cargo test
 
 test-macos:
   stage: test
   tags:
     - macos
   script:
-    - cargo test --verbose
+    - cargo test
 
 test-windows:
   stage: test
   tags:
     - windows
   script:
-    - cargo test --verbose
+    - cargo test
 
 check:
   stage: test
   image: rust:latest
   script:
-    - cargo test --verbose
+    - cargo test
     - rustup component add clippy
     - cargo clippy --all-features --all-targets -- -D warnings
 
