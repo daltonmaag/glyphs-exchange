@@ -566,7 +566,7 @@ fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph) -> Layer {
         .map(|anchor| anchor.into())
         .collect();
 
-    let layer = Layer {
+    Layer {
         name: layer_name,
         associated_master_id,
         layer_id,
@@ -584,8 +584,7 @@ fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph) -> Layer {
         },
         guide_lines: None,
         other_stuff: Default::default(),
-    };
-    layer
+    }
 }
 
 fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {

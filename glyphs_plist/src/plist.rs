@@ -101,6 +101,14 @@ fn escape_string(buf: &mut String, s: &str) {
     }
 }
 
+impl std::fmt::Display for Plist {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut s = String::new();
+        self.push_to_string(&mut s);
+        write!(f, "{s}")
+    }
+}
+
 impl Plist {
     pub fn parse(s: &str) -> Result<Plist, Error> {
         let (plist, _ix) = Plist::parse_rec(s, 0)?;
@@ -234,12 +242,6 @@ impl Plist {
             }
         }
         Plist::String(s.into())
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut s = String::new();
-        self.push_to_string(&mut s);
-        s
     }
 
     fn push_to_string(&self, s: &mut String) {
