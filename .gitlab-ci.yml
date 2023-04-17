@@ -76,4 +76,4 @@ dist-windows:
     - powershell scripts/dist_windows.ps1
   artifacts:
     paths:
-      - glyphs_exchange/target/wix/*.msi
+      - target/wix/*.msi
