@@ -37,19 +37,12 @@ test-windows:
   script:
     - cargo test
 
-check:
-  stage: test
-  image: rust:latest
-  script:
-    - cargo test
-    - rustup component add clippy
-    - cargo clippy --all-features --all-targets -- -D warnings
-
 lint:
   stage: test
   image: rust:latest
   script:
-    - rustup component add rustfmt
+    - rustup component add rustfmt clippy
+    - cargo clippy --all-features --all-targets -- -D warnings
     - cargo fmt -- --check
 
 dist-macos:
