@@ -1,7 +1,13 @@
 [package]
 name = "glyphs-exchange"
 version = "0.1.0"
+license = "Proprietary"
+authors = ["The SD Team <sd@daltonmaag.com>"]
 edition = "2021"
+description = "A UFO to Glyphs.app format and back converter."
+repository = "https://gitlab.daltonmaag.com/damadevs/fl2ufo"
+rust-version = "1.68.2"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,3 +19,6 @@ maplit = "1.0.2"
 norad = { workspace = true }
 rayon = "1.7.0"
 uuid = { version = "1.3.0", features = ["v4", "fast-rng"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
