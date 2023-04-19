@@ -57,7 +57,6 @@ dist-macos:
   tags:
     - macos
   script:
-    - cargo build --locked --release
     - scripts/dist_macos.sh
   artifacts:
     paths:

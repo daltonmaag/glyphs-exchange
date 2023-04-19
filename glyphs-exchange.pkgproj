@@ -527,7 +527,7 @@
 												<key>GID</key>
 												<integer>0</integer>
 												<key>PATH</key>
-												<string>target/release/glyphs-exchange</string>
+												<string>target/universal/glyphs-exchange</string>
 												<key>PATH_TYPE</key>
 												<integer>1</integer>
 												<key>PERMISSIONS</key>
@@ -659,7 +659,7 @@
 			<key>BUILD_PATH</key>
 			<dict>
 				<key>PATH</key>
-				<string>target/release</string>
+				<string>target/universal</string>
 				<key>PATH_TYPE</key>
 				<integer>1</integer>
 			</dict>
