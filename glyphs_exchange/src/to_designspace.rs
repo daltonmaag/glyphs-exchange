@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+use log::warn;
 use norad::{designspace, Glyph};
 use rayon::prelude::*;
 
@@ -67,9 +68,11 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                         if !layer_ids.contains(layer_name) {
                             continue;
                         }
-                        ufo.layers
-                            .get_mut(layer_name)
-                            .expect("Can't find layer in UFO")
+                        let Some(ufo_layer) = ufo.layers.get_mut(layer_name) else {
+                            warn!("Can't find layer {} in UFO {}, skipping.", layer_name, ufo_path.display());
+                            continue;
+                        };
+                        ufo_layer
                     } else {
                         if !layer_ids.contains(&layer.layer_id) {
                             continue;
@@ -77,9 +80,14 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                         ufo.layers.default_layer_mut()
                     };
 
-                    let ufo_glyph = ufo_layer
-                        .get_glyph_mut(&glyph.glyphname)
-                        .expect("Can't find glyph in UFO");
+                    let Some(ufo_glyph) = ufo_layer.get_glyph_mut(&glyph.glyphname) else {
+                        let layer_name = match &layer.name {
+                            Some(name) => format!("layer '{}'", name),
+                            None => "default layer".to_string(),
+                        };
+                        warn!("Can't find glyph {} in UFO {}, {}, skipping.", &glyph.glyphname, ufo_path.display(), layer_name);
+                        continue;
+                    };
                     let converted_glyph = convert_glyphs_glyph_to_ufo_glyph(layer);
                     ufo_glyph.anchors = converted_glyph.anchors;
                     ufo_glyph.contours = converted_glyph.contours;

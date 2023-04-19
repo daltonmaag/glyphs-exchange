@@ -35,8 +35,11 @@ enum Commands {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .format_timestamp(None)
+        .init();
 
+    let cli = Cli::parse();
     match cli.command {
         Commands::Ufo2glyphs {
             designspace_path,

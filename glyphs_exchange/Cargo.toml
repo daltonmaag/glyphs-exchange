@@ -15,8 +15,10 @@ publish = false
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
+env_logger = "0.10"
 glyphs_plist = { path = "../glyphs_plist" }
 kurbo = { workspace = true }
+log = "0.4"
 maplit = "1.0.2"
 norad = { workspace = true }
 rayon = "1.7.0"
