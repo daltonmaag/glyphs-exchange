@@ -60,7 +60,7 @@ dist-macos:
     - scripts/dist_macos.sh
   artifacts:
     paths:
-      - target/release/*.pkg
+      - target/universal/*.pkg
     expire_in: 1 week
 
 dist-windows:
