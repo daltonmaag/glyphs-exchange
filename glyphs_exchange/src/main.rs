@@ -5,6 +5,11 @@ use clap::{Parser, Subcommand};
 pub mod to_designspace;
 pub mod to_glyphs;
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
