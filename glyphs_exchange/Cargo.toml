@@ -2,7 +2,7 @@
 name = "glyphs-exchange"
 # NOTE: Also change in glyphs-exchange.pkgproj.
 # TODO: Extract version from here and use `/usr/local/bin/packagesbuild --package-version ...` to keep the version in sync automatically.
-version = "0.1.0"
+version = "0.2.0"
 license = "Proprietary"
 authors = ["The SD Team <sd@daltonmaag.com>"]
 edition = "2021"
