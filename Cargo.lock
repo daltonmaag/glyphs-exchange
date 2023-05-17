@@ -261,6 +261,7 @@ version = "0.1.0"
 dependencies = [
  "glyphs_plist_derive",
  "kurbo",
+ "maplit",
  "norad",
 ]
 

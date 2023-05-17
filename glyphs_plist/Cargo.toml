@@ -11,3 +11,6 @@ edition = "2021"
 glyphs_plist_derive = { path = "../glyphs_plist_derive" }
 kurbo = { workspace = true }
 norad = { workspace = true }
+
+[dev-dependencies]
+maplit = "1.0.2"
