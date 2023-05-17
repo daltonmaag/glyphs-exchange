@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// An enum representing a property list.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Plist {
     Dictionary(HashMap<String, Plist>),
     Array(Vec<Plist>),
@@ -36,16 +36,21 @@ fn is_numeric(b: u8) -> bool {
 }
 
 fn is_alnum(b: u8) -> bool {
-    is_numeric(b) || b.is_ascii_uppercase() || b.is_ascii_lowercase() || b == b'_'
+    // https://github.com/opensource-apple/CF/blob/3cc41a76b1491f50813e28a4ec09954ffa359e6f/CFOldStylePList.c#L79
+    is_numeric(b)
+        || b.is_ascii_uppercase()
+        || b.is_ascii_lowercase()
+        || b == b'_'
+        || b == b'$'
+        || b == b'/'
+        || b == b':'
+        || b == b'.'
+        || b == b'-'
 }
 
 // Used for serialization; make sure UUID's get quoted
 fn is_alnum_strict(b: u8) -> bool {
     is_alnum(b) && b != b'-'
-}
-
-fn is_ascii_digit(b: u8) -> bool {
-    b.is_ascii_digit()
 }
 
 fn is_hex_upper(b: u8) -> bool {
@@ -61,11 +66,11 @@ fn numeric_ok(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    if s.iter().all(|&b| is_hex_upper(b)) && !s.iter().all(|&b| is_ascii_digit(b)) {
+    if s.iter().all(|&b| is_hex_upper(b)) && !s.iter().all(|&b| b.is_ascii_digit()) {
         return false;
     }
     if s.len() > 1 && s[0] == b'0' {
-        return !s.iter().all(|&b| is_ascii_digit(b));
+        return !s.iter().all(|&b| b.is_ascii_digit());
     }
     true
 }
@@ -417,5 +422,41 @@ impl From<Vec<Plist>> for Plist {
 impl From<HashMap<String, Plist>> for Plist {
     fn from(x: HashMap<String, Plist>) -> Plist {
         Plist::Dictionary(x)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Plist;
+
+    use maplit::hashmap;
+
+    #[test]
+    fn quoting() {
+        let contents = r#"
+        {
+            name = "UFO Filename";
+            value1 = ../../build/instance_ufos/Testing_Rg.ufo;
+            value2 = _;
+            value3 = $;
+            value4 = /;
+            value5 = :;
+            value6 = .;
+            value7 = -;
+        }
+        "#;
+
+        let plist = Plist::parse(contents).unwrap();
+        let plist_expected = Plist::Dictionary(hashmap! {
+            "name".into() => String::from("UFO Filename").into(),
+            "value1".into() => String::from("../../build/instance_ufos/Testing_Rg.ufo").into(),
+            "value2".into() => String::from("_").into(),
+            "value3".into() => String::from("$").into(),
+            "value4".into() => String::from("/").into(),
+            "value5".into() => String::from(":").into(),
+            "value6".into() => String::from(".").into(),
+            "value7".into() => String::from("-").into(),
+        });
+        assert_eq!(plist, plist_expected);
     }
 }
