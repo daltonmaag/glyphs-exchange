@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -eux
+
 cargo build --locked --release --target aarch64-apple-darwin
 cargo build --locked --release --target x86_64-apple-darwin
 
