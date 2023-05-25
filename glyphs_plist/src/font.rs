@@ -73,6 +73,8 @@ pub enum NodeType {
     OffCurve,
     Curve,
     CurveSmooth,
+    QCurve,
+    QCurveSmooth,
 }
 
 #[derive(Clone, Debug, FromPlist, ToPlist)]
@@ -103,12 +105,15 @@ pub struct FontMaster {
     pub descender: Option<i64>,
     pub x_height: Option<i64>,
     pub italic_angle: Option<f64>,
-    pub weight_value: Option<i64>,
-    pub width_value: Option<i64>,
-    pub custom_value: Option<i64>,
-    pub custom_value1: Option<i64>,
-    pub custom_value2: Option<i64>,
-    pub custom_value3: Option<i64>,
+    // Glyphs.app 2.x will truncate floating point coordinates for sources to
+    // integers, 3.x will keep them as is. Likely an edge case, and we're moving
+    // to 3.x, anyway.
+    pub weight_value: Option<f64>,
+    pub width_value: Option<f64>,
+    pub custom_value: Option<f64>,
+    pub custom_value1: Option<f64>,
+    pub custom_value2: Option<f64>,
+    pub custom_value3: Option<f64>,
     #[rest]
     pub other_stuff: HashMap<String, Plist>,
 }
@@ -229,6 +234,8 @@ impl std::str::FromStr for NodeType {
             "OFFCURVE" => Ok(NodeType::OffCurve),
             "CURVE" => Ok(NodeType::Curve),
             "CURVE SMOOTH" => Ok(NodeType::CurveSmooth),
+            "QCURVE" => Ok(NodeType::QCurve),
+            "QCURVE SMOOTH" => Ok(NodeType::QCurveSmooth),
             _ => Err(format!("unknown node type {}", s)),
         }
     }
@@ -242,6 +249,8 @@ impl NodeType {
             NodeType::OffCurve => "OFFCURVE",
             NodeType::Curve => "CURVE",
             NodeType::CurveSmooth => "CURVE SMOOTH",
+            NodeType::QCurve => "QCURVE",
+            NodeType::QCurveSmooth => "QCURVE SMOOTH",
         }
     }
 }

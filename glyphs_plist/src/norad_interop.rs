@@ -46,12 +46,8 @@ impl From<&norad::ContourPoint> for Node {
                 (norad::PointType::OffCurve, _) => NodeType::OffCurve,
                 (norad::PointType::Curve, true) => NodeType::CurveSmooth,
                 (norad::PointType::Curve, false) => NodeType::Curve,
-                (norad::PointType::QCurve, true) => {
-                    unimplemented!("Quadratic curves are not currently supported")
-                }
-                (norad::PointType::QCurve, false) => {
-                    unimplemented!("Quadratic curves are not currently supported")
-                }
+                (norad::PointType::QCurve, true) => NodeType::QCurveSmooth,
+                (norad::PointType::QCurve, false) => NodeType::QCurve,
             },
         }
     }
@@ -65,6 +61,8 @@ impl From<&Node> for norad::ContourPoint {
             NodeType::Line => (norad::PointType::Line, false),
             NodeType::LineSmooth => (norad::PointType::Line, true),
             NodeType::OffCurve => (norad::PointType::OffCurve, false),
+            NodeType::QCurve => (norad::PointType::QCurve, false),
+            NodeType::QCurveSmooth => (norad::PointType::QCurve, true),
         };
         Self::new(node.pt.x, node.pt.y, typ, smooth, None, None, None)
     }

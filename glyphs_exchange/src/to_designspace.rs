@@ -1,18 +1,17 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::Path,
-};
+use std::{collections::HashMap, fs, path::Path};
 
 use log::warn;
 use norad::{designspace, Glyph};
 use rayon::prelude::*;
 
+use crate::location::Location;
+
 #[derive(Debug)]
 struct Glyphs2DesignspaceContext {
     font: glyphs_plist::Font,
-    /// Mapping of relative filename to layer IDs and sparse layer names.
-    ufo_mapping: HashMap<String, HashSet<String>>,
+    // A mapping of UFO filenames to a map of Glyphs layer IDs and brace/sparse
+    // layer names, to which layer they should go into (None => default layer).
+    ufo_mapping: HashMap<String, HashMap<String, Option<String>>>,
 }
 
 impl Glyphs2DesignspaceContext {
@@ -21,14 +20,16 @@ impl Glyphs2DesignspaceContext {
         let designspace = designspace::DesignSpaceDocument::load(designspace_path)
             .expect("Cannot load Designspace");
 
-        // NOTE: The hashset contains layer IDs and sparse layer names, because why not.
-        let mut ufo_mapping: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut ufo_mapping: HashMap<String, HashMap<String, Option<String>>> = HashMap::new();
         for source in &designspace.sources {
-            if let Some(layer_name) = &source.layer {
-                ufo_mapping
+            if source.layer.is_some() {
+                // TODO: Adapt for Glyphs 3, where we should match the
+                // location to the brace location instead of the layer name.
+                *ufo_mapping
                     .entry(source.filename.clone())
                     .or_default()
-                    .insert(layer_name.clone());
+                    .entry(Location::from_dimension(&source.location).to_string())
+                    .or_default() = source.layer.clone();
             } else {
                 let glyphs_master = font
                     .font_master
@@ -41,10 +42,11 @@ impl Glyphs2DesignspaceContext {
                                 .expect("Designspace sources must have a style name")
                     })
                     .expect("Cannot find matching Glyphs master for source");
-                ufo_mapping
+                *ufo_mapping
                     .entry(source.filename.clone())
                     .or_default()
-                    .insert(glyphs_master.id.clone());
+                    .entry(glyphs_master.id.clone())
+                    .or_default() = None;
             }
         }
 
@@ -64,20 +66,23 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
 
             for glyph in context.font.glyphs.iter() {
                 for layer in glyph.layers.iter() {
-                    let ufo_layer = if let Some(layer_name) = &layer.name {
-                        if !layer_ids.contains(layer_name) {
-                            continue;
-                        }
-                        let Some(ufo_layer) = ufo.layers.get_mut(layer_name) else {
-                            warn!("Can't find layer {} in UFO {}, skipping.", layer_name, ufo_path.display());
+                    let ufo_layer = {
+                        // TODO: Adapt for Glyphs 3 where a brace layer could be
+                        // identified by position.
+                        // TODO: Deal with bracket (and other functional) layers
+                        let Some(ufo_layer_name) = layer_ids.get(layer.name.as_ref().unwrap_or(&layer.layer_id)) else {
                             continue;
                         };
-                        ufo_layer
-                    } else {
-                        if !layer_ids.contains(&layer.layer_id) {
-                            continue;
+                        match ufo_layer_name {
+                            Some(ufo_layer_name) => {
+                                let Some(ufo_layer) = ufo.layers.get_mut(ufo_layer_name) else {
+                                    warn!("Can't find layer {} in UFO {}, skipping.", ufo_layer_name, ufo_path.display());
+                                    continue;
+                                };
+                                ufo_layer
+                            },
+                            None => ufo.default_layer_mut(),
                         }
-                        ufo.layers.default_layer_mut()
                     };
 
                     let Some(ufo_glyph) = ufo_layer.get_glyph_mut(&glyph.glyphname) else {

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+pub mod location;
 pub mod to_designspace;
 pub mod to_glyphs;
 

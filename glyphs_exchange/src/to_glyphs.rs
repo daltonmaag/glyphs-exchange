@@ -8,6 +8,8 @@ use rayon::prelude::*;
 use glyphs_plist;
 use glyphs_plist::{Layer, Plist};
 
+use crate::location::Location;
+
 #[derive(Debug)]
 struct DesignspaceContext {
     designspace: designspace::DesignSpaceDocument,
@@ -28,26 +30,13 @@ struct FontProperties {
 #[derive(Debug, Clone)]
 enum LayerId {
     Master(String),
-    AssociatedWithMaster(String, String, String),
+    AssociatedWithMaster {
+        associated_master_id: String,
+        layer_id: String,
+        ufo_layer_name: String,
+        glyphs_layer_name: String,
+    },
 }
-
-type DesignLocation = (
-    i64,
-    Option<i64>,
-    Option<i64>,
-    Option<i64>,
-    Option<i64>,
-    Option<i64>,
-);
-
-type InstanceLocation = (
-    f64,
-    Option<f64>,
-    Option<f64>,
-    Option<f64>,
-    Option<f64>,
-    Option<f64>,
-);
 
 impl DesignspaceContext {
     fn from_path(designspace_path: &Path) -> Self {
@@ -113,41 +102,13 @@ impl DesignspaceContext {
                 .iter()
                 .find(|parent_source| parent_source.filename == source.filename)
                 .expect("Parent source not found in Designspace.");
-            LayerId::AssociatedWithMaster(
-                self.ids[&parent_source.name].clone(),
-                self.ids[&source.name].clone(),
-                source.layer.clone().unwrap(),
-            )
+            LayerId::AssociatedWithMaster {
+                associated_master_id: self.ids[&parent_source.name].clone(),
+                layer_id: self.ids[&source.name].clone(),
+                ufo_layer_name: source.layer.clone().unwrap(),
+                glyphs_layer_name: Location::from_dimension(&source.location).to_string(),
+            }
         }
-    }
-
-    // TODO: Fix reliance on the order of dimensions in the location.
-    fn design_location(location: &[designspace::Dimension]) -> DesignLocation {
-        let location_at = |i: usize| {
-            location
-                .get(i)
-                .map(|dim| dim.xvalue.unwrap_or(0.0).round() as i64)
-        };
-        (
-            location_at(0).unwrap_or(0),
-            location_at(1),
-            location_at(2),
-            location_at(3),
-            location_at(4),
-            location_at(5),
-        )
-    }
-
-    fn design_location_float(location: &[designspace::Dimension]) -> InstanceLocation {
-        let location_at = |i: usize| location.get(i).map(|dim| dim.xvalue.unwrap_or(0.0) as f64);
-        (
-            location_at(0).unwrap_or(0.0),
-            location_at(1),
-            location_at(2),
-            location_at(3),
-            location_at(4),
-            location_at(5),
-        )
     }
 
     fn axis_by_name(&self, name: &str) -> &designspace::Axis {
@@ -354,9 +315,12 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
             let font = &context.ufos[&source.filename];
             let ufo_layer = match &layer_id {
                 LayerId::Master(_) => font.default_layer(),
-                LayerId::AssociatedWithMaster(_, _, layer_name) => {
-                    font.layers.get(layer_name).unwrap_or_else(|| {
-                        panic!("Cannot find layer {} in {}.", layer_name, &source.filename)
+                LayerId::AssociatedWithMaster { ufo_layer_name, .. } => {
+                    font.layers.get(ufo_layer_name).unwrap_or_else(|| {
+                        panic!(
+                            "Cannot find layer {} in {}.",
+                            ufo_layer_name, &source.filename
+                        )
                     })
                 }
             };
@@ -378,9 +342,11 @@ pub fn command_to_glyphs(designspace_path: &Path) -> glyphs_plist::Font {
     let default_source = context.default_source();
     let default_ufo = context.ufos.get(&default_source.filename).unwrap();
     let default_ufo_layer = default_ufo.default_layer();
+    let mut seen_glyphs = HashSet::new();
     let glyphs: Vec<glyphs_plist::Glyph> = font_properties
         .glyph_order
         .iter()
+        .filter(|name| seen_glyphs.insert(name.as_str()))
         .filter_map(|name| default_ufo_layer.get_glyph(name))
         .map(|glyph| {
             let mut converted_glyph = new_glyph_from(glyph);
@@ -436,8 +402,9 @@ fn master_from(
         panic!("Master does not seem to be a master?!")
     };
 
+    let location = Location::from_dimension(&source.location);
     let (weight_value, width_value, custom_value, custom_value1, custom_value2, custom_value3) =
-        DesignspaceContext::design_location(&source.location);
+        location.as_tuple();
 
     let ascender = font
         .font_info
@@ -498,6 +465,7 @@ fn master_from(
 
 fn instance_from(instance: &designspace::Instance) -> glyphs_plist::Instance {
     let name = instance.stylename.clone().unwrap_or_default();
+    let location = Location::from_dimension(&instance.location);
     let (
         interpolation_weight,
         interpolation_width,
@@ -505,7 +473,7 @@ fn instance_from(instance: &designspace::Instance) -> glyphs_plist::Instance {
         interpolation_custom1,
         interpolation_custom2,
         interpolation_custom3,
-    ) = DesignspaceContext::design_location_float(&instance.location);
+    ) = location.as_tuple();
 
     // TODO: make norad::designspace use proper ufo type
     let (is_bold, is_italic) = match &instance.stylemapstylename {
@@ -540,10 +508,15 @@ fn instance_from(instance: &designspace::Instance) -> glyphs_plist::Instance {
 fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph) -> Layer {
     let (associated_master_id, layer_id, layer_name) = match layer_id {
         LayerId::Master(id) => (None, id.clone(), None),
-        LayerId::AssociatedWithMaster(parent_id, child_id, layer_name) => (
+        LayerId::AssociatedWithMaster {
+            associated_master_id: parent_id,
+            layer_id: child_id,
+            glyphs_layer_name,
+            ..
+        } => (
             Some(parent_id.clone()),
             child_id.clone(),
-            Some(layer_name.clone()),
+            Some(glyphs_layer_name.clone()),
         ),
     };
 
