@@ -206,6 +206,7 @@ impl FromPlist for norad::Codepoints {
 
 impl ToPlist for norad::Codepoints {
     fn to_plist(self) -> Plist {
+        assert!(!self.is_empty());
         self.iter()
             .map(|c| format!("{:04X}", c as usize))
             .collect::<Vec<_>>()
