@@ -1,6 +1,6 @@
 [package]
 name = "glyphs-exchange"
-version = "0.3.0"
+version = "0.4.0"
 license = "Proprietary"
 authors = ["The SD Team <sd@daltonmaag.com>"]
 edition = "2021"
