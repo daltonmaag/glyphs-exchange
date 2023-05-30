@@ -562,7 +562,11 @@ fn layer_from(layer_id: &LayerId, glyph: &norad::Glyph) -> Layer {
 
 fn new_glyph_from(glyph: &norad::Glyph) -> glyphs_plist::Glyph {
     glyphs_plist::Glyph {
-        unicode: Some(glyph.codepoints.clone()),
+        unicode: if glyph.codepoints.is_empty() {
+            None
+        } else {
+            Some(glyph.codepoints.clone())
+        },
         glyphname: glyph.name().clone(),
         layers: Default::default(),
         other_stuff: Default::default(),
