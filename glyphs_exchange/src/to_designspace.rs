@@ -66,7 +66,7 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
 
             for glyph in context.font.glyphs.iter() {
                 for layer in glyph.layers.iter() {
-                    let ufo_layer = {
+                    let (ufo_layer, is_default) = {
                         // TODO: Adapt for Glyphs 3 where a brace layer could be
                         // identified by position.
                         // TODO: Deal with bracket (and other functional) layers
@@ -75,13 +75,14 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                         };
                         match ufo_layer_name {
                             Some(ufo_layer_name) => {
+                                let is_default = ufo.layers.default_layer().name().as_str() == ufo_layer_name.as_str();
                                 let Some(ufo_layer) = ufo.layers.get_mut(ufo_layer_name) else {
                                     warn!("Can't find layer {} in UFO {}, skipping.", ufo_layer_name, ufo_path.display());
                                     continue;
                                 };
-                                ufo_layer
+                                (ufo_layer, is_default)
                             },
-                            None => ufo.default_layer_mut(),
+                            None => (ufo.default_layer_mut(), true),
                         }
                     };
 
@@ -93,7 +94,16 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
                         warn!("Can't find glyph {} in UFO {}, {}, skipping.", &glyph.glyphname, ufo_path.display(), layer_name);
                         continue;
                     };
-                    let converted_glyph = convert_glyphs_glyph_to_ufo_glyph(layer);
+                    let converted_glyph = convert_glyphs_glyph_to_ufo_glyph(glyph, layer);
+
+                    // Codepoints should only go into the default layer.
+                    if is_default {
+                        ufo_glyph.codepoints = converted_glyph.codepoints;
+                    } else {
+                        ufo_glyph.codepoints.clear();
+                    }
+
+                    ufo_glyph.width = converted_glyph.width;
                     ufo_glyph.anchors = converted_glyph.anchors;
                     ufo_glyph.contours = converted_glyph.contours;
                     ufo_glyph.components = converted_glyph.components;
@@ -113,11 +123,18 @@ pub fn command_to_designspace(glyphs_path: &Path, designspace_path: &Path) {
         });
 }
 
-fn convert_glyphs_glyph_to_ufo_glyph(layer: &glyphs_plist::Layer) -> norad::Glyph {
+fn convert_glyphs_glyph_to_ufo_glyph(
+    glyph: &glyphs_plist::Glyph,
+    layer: &glyphs_plist::Layer,
+) -> norad::Glyph {
     let mut ufo_glyph = Glyph::new("converted_glyph");
 
     // TODO: Figure out height: only interesting if there is a vertical origin?
     ufo_glyph.width = layer.width;
+
+    if let Some(unicodes) = &glyph.unicode {
+        ufo_glyph.codepoints = unicodes.clone();
+    }
 
     ufo_glyph.anchors.extend(
         layer
